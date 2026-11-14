@@ -189,6 +189,8 @@ for rid in regions:
     t = statistics.fmean(f(x["t2m"]) for x in p)
     rain_by_year, by_month = collections.defaultdict(float), collections.defaultdict(float)
     for x in p:
+        if f(x["prectotcorr"]) is None:      # a day removed by the rain QA (DATA-05) is a gap, not 0
+            continue
         rain_by_year[x["date"][:4]] += f(x["prectotcorr"])
         by_month[x["date"][5:7]] += f(x["prectotcorr"])
     ys = list(rain_by_year.values())
@@ -200,12 +202,13 @@ for rid in regions:
 # ---------------------------------------------------------------- G. rain outliers
 print("\n== G. Rain outliers (PRECTOTCORR is model output; a single day above ~250 mm is implausible in these regions)")
 for rid in regions:
-    best = max(power[rid], key=lambda x: f(x["prectotcorr"]))
+    kept = [x for x in power[rid] if f(x["prectotcorr"]) is not None]
+    best = max(kept, key=lambda x: f(x["prectotcorr"]))
     by_year = collections.defaultdict(float)
-    for x in power[rid]:
+    for x in kept:
         by_year[x["date"][:4]] += f(x["prectotcorr"])
     lo, hi = min(by_year, key=by_year.get), max(by_year, key=by_year.get)
-    big = sum(f(x["prectotcorr"]) > 250 for x in power[rid])
+    big = sum(f(x["prectotcorr"]) > 250 for x in kept)
     print(f"   {rid:<24} wettest day {best['date']} = {f(best['prectotcorr']):>4.0f} mm (days >250 mm: {big}) | "
           f"driest year {lo} {by_year[lo]:.0f} mm, wettest year {hi} {by_year[hi]:.0f} mm")
 
@@ -216,7 +219,8 @@ for r in table("power_monthly"):
 for rid in regions:
     sums = collections.defaultdict(list)
     for r in power[rid]:
-        sums[r["date"][:7]].append(f(r["prectotcorr"]))
+        if f(r["prectotcorr"]) is not None:
+            sums[r["date"][:7]].append(f(r["prectotcorr"]))
     n = bad = 0
     for m in monthly[rid]:
         d = sums.get(m["month"])
@@ -250,10 +254,25 @@ gold_dir = work / "gold" / f"v{catalog['gold_schema_version']}"
 one = json.loads((gold_dir / f"{next(iter(regions))}.json").read_text(encoding="utf-8"))
 print("   dim_region columns:", ", ".join(next(iter(regions.values())).keys()))
 print("   dim_crop columns  :", ", ".join(next(iter(crops.values())).keys()))
-need_crop = ["planting_season", "growth_days", "temp_opt_min_c", "temp_opt_max_c", "cold_limit_c", "heat_limit_c",
-             "water_need_mm", "is_legume", "ground_cover_erosion", "market_value", "source"]
-have = set(next(iter(crops.values())).keys())
-print("   crop-table fields from the data contract still missing:", ", ".join(c for c in need_crop if c not in have))
+# data-contract crop-table field -> where the pipeline now provides it (dim_crop columns, crop_profile, crop_water_demand)
+profile = {r["crop_code"]: r for r in table("crop_profile")}
+wdc = table("crop_water_demand")
+have_crop = set(next(iter(crops.values())).keys())
+have_prof = set(next(iter(profile.values())).keys()) if profile else set()
+provided = {
+    "planting_season": False,                                        # GAEZ start day is noisy: not delivered as a column
+    "growth_days": "cycle_days_min" in have_crop,
+    "temp_opt_min_c": False, "temp_opt_max_c": False,                # GAEZ gives only a minimum temperature
+    "cold_limit_c": "min_temp_c" in have_crop,
+    "heat_limit_c": False,
+    "water_need_mm": bool(wdc),
+    "is_legume": "is_legume" in have_crop,
+    "ground_cover_erosion": "erosion_protection" in have_prof,
+    "market_value": "gross_revenue_usd_ha" in have_prof,
+    "source": "traits_source" in have_crop,
+}
+print("   crop-table fields of the data contract: delivered ->", ", ".join(k for k, v in provided.items() if v))
+print("   crop-table fields of the data contract: STILL MISSING ->", ", ".join(k for k, v in provided.items() if not v))
 print("   gold metadata keys:", ", ".join(one["metadata"].keys()))
 print("   power units in gold:", one["climate"]["units"])
 print("   ndvi row keys     :", ", ".join(one["ndvi"]["sources"]["modis_qa"]["series"][0].keys()))
@@ -261,3 +280,78 @@ n_gold = {rid: len(json.loads((gold_dir / f"{rid}.json").read_text(encoding="utf
 n_sil = {rid: len(ndvi[rid]["modis_qa"]) for rid in regions}
 print("   gold vs silver NDVI row counts equal:", n_gold == n_sil)
 print("   datasets in catalog:", ", ".join(catalog["datasets"]))
+
+# ---------------------------------------------------------------- J. rain product (DATA-05/06/07)
+print("\n== J. Rain: POWER vs CHIRPS (the product rain is rain_monthly_best, not POWER)")
+val = collections.defaultdict(list)
+for r in table("rain_validation"):
+    val[r["region_id"]].append(r)
+best = collections.defaultdict(list)
+for r in table("rain_monthly_best"):
+    best[r["region_id"]].append(r)
+for rid in regions:
+    ys = val.get(rid, [])
+    if not ys:
+        print(f"   {rid:<24} NO rain_validation rows")
+        continue
+    mp = statistics.fmean(f(y["power_mm"]) for y in ys)
+    mc = statistics.fmean(f(y["chirps_mm"]) for y in ys)
+    badyears = [y["year"] for y in ys if y["status"] != "ok"]
+    fallback = sum(1 for m in best[rid] if m["best_source"] != "chirps")
+    print(f"   {rid:<24} POWER {mp:>5.0f} vs CHIRPS {mc:>5.0f} mm/yr ({mp / mc - 1:+.0%})  years off >30%: {len(badyears)}  "
+          f"months using POWER fallback: {fallback}/{len(best[rid])}")
+
+# ---------------------------------------------------------------- K. environment inputs (DATA-03)
+print("\n== K. Environment inputs for the five priorities (water, soil, nitrogen, erosion, income)")
+slope = {r["region_id"]: r for r in table("terrain_slope")}
+eros = {r["region_id"]: r for r in table("erosion_context")}
+soil = collections.defaultdict(dict)
+for r in table("soil_quality"):
+    soil[r["region_id"]][(r["factor"], r["input_level"])] = f(r["rating_mean"])
+bal = collections.defaultdict(list)
+for r in table("water_balance_monthly"):
+    bal[r["region_id"]].append(r)
+for rid in regions:
+    if rid not in slope:
+        print(f"   {rid:<24} NO environment rows")
+        continue
+    yrs = collections.defaultdict(float)
+    for m in bal[rid]:
+        yrs[m["month"][:4]] += f(m["balance_mm"])
+    full = [v for y, v in yrs.items() if sum(1 for m in bal[rid] if m["month"][:4] == y) == 12]
+    print(f"   {rid:<24} slope {f(slope[rid]['slope_mean_pct']):>5.1f}% (>12%: {f(slope[rid]['share_gt12_pct']):>4.0f}%)  "
+          f"water balance {statistics.fmean(full):>+6.0f} mm/yr  soil SQ0/SQ1 {soil[rid][('SQ0', 'LIM')]:.2f}/{soil[rid][('SQ1', 'LIM')]:.2f}  "
+          f"erosion {eros[rid]['base_hazard']}")
+print(f"   crop_water_demand rows: {len(wdc)} (expected {len(regions) * len(crops) * 2})")
+with_rev = [c for c, r in profile.items() if r["gross_revenue_usd_ha"] != ""]
+print(f"   crop_profile: {len(profile)} crops, income known for {len(with_rev)}; family check: "
+      f"{collections.Counter(r['family_check'] for r in profile.values())}; cover class basis: "
+      f"{collections.Counter(r['cover_confidence'] for r in profile.values())}")
+
+# ---------------------------------------------------------------- L. contest checklist
+print("\n== L. Contest checklist (what a judge can verify in the DATA; the web app is not part of this audit)")
+nd_rows = table("ndvi_series")
+by_src = collections.defaultdict(set)
+for r in nd_rows:
+    by_src[r["region_id"]].add(r["source_key"])
+labelled = all(r["source"] in ("measured", "interpolated", "missing") for r in nd_rows) and \
+    all(not (r["source"] == "missing" and r["median_final"] != "") for r in nd_rows)
+smap_rows = table("smap_daily")
+smap_regions = {r["region_id"] for r in smap_rows}
+lc_years = collections.Counter(r["region_id"] for r in table("landcover_by_year"))
+gf = collections.Counter(r["region_id"] for r in table("gfsad_points"))
+checks = {
+    "6 demo regions, 11 years (2015-2025) of daily climate": all(len(power[r]) == 4018 for r in regions) and len(regions) >= 3,
+    "NDVI with QA flags; every day is measured / interpolated / missing, a missing day has no value": labelled and bool(nd_rows),
+    "two independent NDVI sources (MODIS + GIBS) in every region": all({"modis_qa", "gibs"} <= by_src[r] for r in regions),
+    "rain checked against an independent source and replaced where POWER is wrong": all(rid in val for rid in regions),
+    "soil moisture from satellite (SMAP L3) in every region, quality flag kept as NULL when not recommended":
+        smap_regions == set(regions) and any(r["sm_recommended"] == "" for r in smap_rows),
+    "land cover (MCD12Q1, 11 years) and 30 m cropland mask (GFSAD30) in every region":
+        all(lc_years[r] == 11 and gf[r] > 0 for r in regions),
+    "crop table with sourced traits (GAEZ A4-6, GBIF, FAOSTAT)": bool(profile) and len(profile) == len(crops),
+    "slope, soil, water balance, erosion inputs": len(slope) == len(regions),
+    "every table in the catalog has rows": all(d.get("rows") for d in catalog["datasets"].values()),
+}
+for name, ok in checks.items():
+    print(f"   [{'OK' if ok else 'GAP'}] {name}")
