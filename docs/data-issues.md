@@ -83,9 +83,9 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
   | Sơn La | 2022-02-04 | 211 mm | 0 mm |
   | Thái Bình | 2020-10-18 | 205 mm | 17 mm |
   | Đắk Lắk | 2019-08-07 | 200 mm | 29 mm |
-  | Thái Bình | 2024-09-07 | 155 mm | **chưa đối chiếu** |
+  | Thái Bình | 2024-09-07 | 155 mm | **144 mm (mưa thật, bão Yagi)** |
 
-  Ngày 2024-09-07 (155 mm) bị loại chỉ vì vượt ngưỡng; cần kiểm lại (có thể là mưa bão Yagi thật, 7/9/2024). Tháng 6/2020 An Giang từ 1.114 mm xuống 437 mm (ERA5: 291 mm); tổng năm 2020 từ 3.041 mm xuống khoảng 2.350 mm. Ngưỡng 250 mm ban đầu chỉ bắt được ngày An Giang. Ngưỡng cố định có rủi ro cắt mưa thật (miền Trung tháng 10/2020), nhưng 6 vùng demo không ở miền Trung.
+  **Ngày 2024-09-07 là mưa thật** (ERA5 144 mm, bão Yagi) nhưng bị loại nhầm vì ngưỡng 150 mm; ngưỡng ~180 mm sẽ giữ ngày này mà vẫn loại 4 ngày còn lại (≥ 200 mm). Tháng 6/2020 An Giang từ 1.114 mm xuống 437 mm (ERA5: 291 mm); tổng năm 2020 từ 3.041 mm xuống khoảng 2.350 mm. Ngưỡng 250 mm ban đầu chỉ bắt được ngày An Giang. Ngưỡng cố định có rủi ro cắt mưa thật (miền Trung tháng 10/2020), nhưng 6 vùng demo không ở miền Trung.
 - **Chưa xử lý:** lưới khí hậu cả nước (`vn_grid_monthly`) là dữ liệu tháng nên không áp được quy tắc theo ngày; ô lưới chứa An Giang vẫn mang số tháng 6/2020 cao bất thường.
 
 ### DATA-06 · Cao · Ninh Thuận 1.961 mm/năm, nhiều khả năng quá cao
