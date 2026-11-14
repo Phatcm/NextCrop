@@ -1,0 +1,9 @@
+{
+  "name": "field-shift-web",
+  "private": true,
+  "type": "module",
+  "description": "Static UI served by app/api. package.json exists only so `node --test` treats js/*.js as ES modules; there is no build step.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

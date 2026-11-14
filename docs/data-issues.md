@@ -45,10 +45,10 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 | DATA-11 | Thấp | GAEZ là tiềm năng, không đơn điệu | Hùng (giao diện) |
 | DATA-12 | Thấp | Độ phủ thời gian: không có 2026, mốc NDVI trước 2015 | Phát |
 | DATA-13 | Thấp | Đơn vị và ngày tạo chưa có trong Postgres | Phát |
-| DATA-14 | Trung bình | Điểm ngoài Việt Nam (Lào, Campuchia, Trung Quốc) vẫn nhận phương án | Hùng (app) + Phát |
+| DATA-14 | Trung bình, **giao diện đã chặn** (API chưa) | Điểm ngoài Việt Nam (Lào, Campuchia, Trung Quốc) vẫn nhận phương án từ API; giao diện từ chối bằng ranh giới tỉnh năm 2008 | Hùng (app) + Phát |
 | DATA-15 | Thấp (enhancement), **view đã xong** | Gợi ý theo nhóm cây: tách luân canh (cây một năm) khỏi chuyển đổi (cây lâu năm). View `v_crop_ranking` đã có `rank_annual` (migration `010`); còn tầng chuyển đổi và lọc nhóm | Phát |
 | DATA-16 | Thấp (enhancement, làm sau cuộc thi nếu còn thời gian) | Ô dữ liệu nhỏ hơn 80–85 km²: lớp GAEZ 30 giây cung kết hợp lớp che đất canh tác | Phát |
-| OPS-01..13 | xem mục 4 | | |
+| OPS-01..14 | xem mục 4 | | |
 
 ## 3. Vấn đề dữ liệu
 
@@ -169,7 +169,8 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - **Vấn đề:** `gaez_grid` là hình chữ nhật 102–110°E, 8–24°N nên có cả Lào, Campuchia và miền nam Trung Quốc. Bộ sinh phương án không biết ranh giới quốc gia: điểm ở Viêng Chăn (17,97°N 102,6°E) nhận kết quả đầy đủ như điểm ở Việt Nam. Điểm ngoài biển thì bị từ chối đúng (không có ô trong 0,1°).
 - **[ĐÃ XÁC NHẬN] 14/11** bằng lệnh `rotation_options.py` với điểm ở Viêng Chăn. Dữ liệu GAEZ ở đó vẫn là GAEZ hợp lệ; vấn đề là phạm vi sản phẩm (đề và dữ liệu mưa hiệu chỉnh chỉ cho Việt Nam).
 - **Hướng xử lý:** cần một lớp ranh giới Việt Nam (chưa có trong repo; ứng viên: ranh giới quốc gia của UN/GADM, **[CHƯA KIỂM CHỨNG]** giấy phép) để (a) giới hạn vùng chọn trên bản đồ, và/hoặc (b) thêm cột `in_vietnam` vào `gaez_grid` lúc ETL. App phải tự giới hạn cho đến khi có.
-- **Xong khi:** điểm ngoài Việt Nam bị từ chối với thông báo rõ, có test.
+- **Cập nhật 14/11 (giao diện `app/web`):** giao diện đã chặn ở phía trình duyệt bằng tệp ranh giới tỉnh (geoBoundaries, bản đã đơn giản hoá, giấy phép ghi là miền công cộng): điểm ở Viêng Chăn hoặc ngoài khơi bị từ chối với thông báo rõ, có test (`app/web/tests`). **Mới chặn ở giao diện:** API (`/api/options`) vẫn trả kết quả cho điểm ở Lào hoặc Campuchia nằm trong khung. Ranh giới là **bản năm 2008** (63 tỉnh cũ, đã đơn giản hoá), nên sát biên có thể sai vài km và tên tỉnh không khớp các đợt sáp nhập sau đó. Nhóm ô vùng đệm 2 ô ngoài biên tỉnh chỉ lấy ô có dữ liệu (đất liền).
+- **Xong khi:** điểm ngoài Việt Nam bị từ chối với thông báo rõ, có test (giao diện: đã xong; API và nguồn ranh giới mới hơn: còn lại).
 
 ### DATA-15 · Thấp (enhancement) · Gợi ý theo nhóm cây
 - **Vấn đề:** view `v_crop_ranking` xếp hạng cả 24 cây, kể cả cây lâu năm. Trên Neon (14/11), An Giang (vùng lúa) có **dừa hạng 2**, Sóc Trăng có **cọ dầu hạng 1**. Hiển thị bảng này dưới nhãn "cây nên trồng" cho đất lúa là vô lý: điểm GAEZ chỉ cho biết đất hợp cây nào, không phân biệt luân canh với chuyển hẳn sang cây lâu năm. Bộ sinh phương án đã loại cây lâu năm nên không bị lỗi này, nhưng chưa có ràng buộc theo nhóm (ví dụ vẫn có thể gợi ý cà chua sau lúa, kèm cảnh báo thoát nước).
@@ -224,6 +225,9 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 
 ### OPS-11 · Trung bình · Role chỉ đọc cho API
 - API chạy mọi truy vấn trong `BEGIN READ ONLY ... ROLLBACK` nên **không ghi được dữ liệu kể cả khi dùng `neondb_owner`** (có test với Postgres thật, chạy ở CI qua workflow `api-tests`, xem OPS-13). Dù vậy vẫn nên tạo role chỉ đọc theo `docs/postgres-hosting.md` mục 2 và đặt chuỗi kết nối của nó vào `APP_DATABASE_URL`. Tạo role là ghi vào Neon và liên quan mật khẩu, nên do Phát hoặc Hùng làm.
+
+### OPS-14 · Trung bình · Ảnh nền bản đồ (Esri) là dịch vụ ngoài lúc chạy
+- Giao diện lấy ảnh vệ tinh nền từ Esri World Imagery (`server.arcgisonline.com`, không cần khóa). **Điều khoản sử dụng chưa được kiểm tra** (cần xem trước khi nộp bài hoặc triển khai công khai) và nó là một phụ thuộc ngoài lúc chạy, khác với dữ liệu NASA/FAO nằm trong Postgres. Phương án thay: NASA GIBS (hợp chủ đề, nhưng độ phân giải thô hơn nhiều) hoặc Sentinel-2 cloudless (giấy phép chưa kiểm). Thư viện bản đồ MapLibre và phông Poppins cũng tải từ CDN (cdnjs, Google Fonts); container chạy không có mạng ngoài sẽ không có bản đồ.
 
 ### OPS-13 · ĐÃ XONG (14/11/2026) · CI cho API
 - Workflow `api-tests` (test API và test `PgRepo` với Postgres 17 thật) nằm ở `.github/workflows/api-tests.yml`. Lần đẩy đầu bị GitHub từ chối vì token của `gh` thiếu quyền `workflow`; sau `gh auth refresh -s workflow` đã đẩy được. Kết quả chạy đầu tiên: xem PR #18.

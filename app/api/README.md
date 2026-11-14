@@ -16,6 +16,7 @@ Tài liệu tương tác: http://localhost:8000/docs. Test: `python -m pytest` (
 | `APP_DATABASE_URL` | chuỗi kết nối, ưu tiên số 1 (nên là role chỉ đọc) |
 | `DATABASE_URL_POOLED`, `DATABASE_URL` | dự phòng theo thứ tự này (chuỗi Neon pooled dùng được: bảng được gọi kèm tên schema) |
 | `CORS_ORIGINS` | địa chỉ giao diện, cách nhau bằng dấu phẩy (mặc định các cổng dev `localhost:5173` và `:3000`) |
+| `WEB_DIR` | thư mục giao diện tĩnh phục vụ ở `/` (mặc định `../web`, tức `app/web`; tắt nếu không có `index.html`) |
 | `PIPELINE_DIR` | mặc định `../../pipeline` (API dùng chung `src.rotation` và `src.db.postgres` với pipeline) |
 
 Bí mật chỉ nằm trong biến môi trường, không có trong repo.

@@ -2,9 +2,9 @@ name: api-tests
 
 on:
   push:
-    paths: ['app/api/**', 'pipeline/src/rotation/**', 'pipeline/src/db/**', 'pipeline/db/migrations/**', '.github/workflows/api-tests.yml']
+    paths: ['app/api/**', 'app/web/**','pipeline/src/rotation/**', 'pipeline/src/db/**', 'pipeline/db/migrations/**', '.github/workflows/api-tests.yml']
   pull_request:
-    paths: ['app/api/**', 'pipeline/src/rotation/**', 'pipeline/src/db/**', 'pipeline/db/migrations/**', '.github/workflows/api-tests.yml']
+    paths: ['app/api/**', 'app/web/**','pipeline/src/rotation/**', 'pipeline/src/db/**', 'pipeline/db/migrations/**', '.github/workflows/api-tests.yml']
 
 jobs:
   test:
@@ -33,3 +33,8 @@ jobs:
           cache-dependency-path: app/api/requirements.txt
       - run: pip install -r requirements.txt
       - run: python -m pytest -v
+      - uses: actions/setup-node@v4          # the UI has no build step; its pure logic is tested with node:test
+        with:
+          node-version: '22'
+      - run: node --test
+        working-directory: app/web

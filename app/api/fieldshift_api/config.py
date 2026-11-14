@@ -21,5 +21,11 @@ def database_url() -> str | None:
     return None
 
 
+def web_dir() -> Path | None:
+    """The static UI (app/web) served at / when it exists; WEB_DIR overrides the location."""
+    d = Path(os.environ.get("WEB_DIR") or Path(__file__).resolve().parents[2] / "web")
+    return d if (d / "index.html").is_file() else None
+
+
 def cors_origins() -> list[str]:
     return [o.strip() for o in os.environ.get("CORS_ORIGINS", DEFAULT_CORS).split(",") if o.strip()]
