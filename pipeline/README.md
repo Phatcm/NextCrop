@@ -57,6 +57,7 @@ python run_etl.py --skip-gaez-grid                          # bỏ qua lưới G
 python upload_r2.py --dry-run           # xem sẽ đẩy gì
 python upload_r2.py --init --prune      # đẩy lên R2 (lần đầu có --init; --prune dọn object cũ)
 python upload_r2.py --verify            # đối chiếu bucket với manifest
+python upload_r2.py --allow-empty BẢNG  # cho phép một bảng rỗng có chủ ý (mặc định chặn khi bảng có dữ liệu ở lần trước mà lần này về 0)
 python audit_r2.py                      # kiểm tra dữ liệu trên R2 so với yêu cầu dự án (xem ../docs/data-audit.md)
 python load_postgres.py --dry-run       # không cần server: dữ liệu có qua được PK/FK/CHECK/kiểu của Postgres không
 python load_postgres.py --check-server  # server đích đã đủ điều kiện chưa (phiên bản, UTF8, quyền, TLS)
@@ -81,7 +82,7 @@ _meta/latest.json                                con trỏ tới lần đẩy m�
 ## PostgreSQL
 `db/migrations/001_init.sql` tạo schema `field_shift`: 13 bảng dữ liệu (cùng tên và cột với bảng silver), khóa chính, khóa ngoại, CHECK, 2 view cho app (`v_region_overview`, `v_crop_ranking`) và bảng `pipeline_run` ghi lại lần nạp nào đang nằm trong DB. App nên đặt `search_path = field_shift`.
 
-`load_postgres.py` kéo silver từ R2 (kiểm tra sha256 từng file), áp migration, rồi `TRUNCATE` + `COPY` + kiểm tra **trong một transaction**: kiểm tra hỏng thì rollback, DB giữ nguyên dữ liệu cũ.
+`load_postgres.py` kéo silver từ R2 (kiểm tra sha256 từng file), áp migration, rồi `TRUNCATE` + `COPY` + kiểm tra **trong một transaction**: kiểm tra hỏng thì rollback, DB giữ nguyên dữ liệu cũ. Một kiểm tra chặn việc bảng có dữ liệu ở lần nạp trước mà lần này về 0 dòng (thường do máy thiếu đầu vào: chạy `pull_bronze.py` rồi `run_etl.py --offline`); cho phép có chủ ý bằng `--allow-empty BẢNG`.
 
 Đang dùng Neon: pipeline dùng chuỗi **trực tiếp** (`DATABASE_URL`), app dùng chuỗi pooled (`DATABASE_URL_POOLED`); xem mục 5b của tài liệu bên dưới. Cấu hình server, role, mạng và TLS khi tự host: [../docs/postgres-hosting.md](../docs/postgres-hosting.md).
 

@@ -22,6 +22,7 @@ from pathlib import Path
 
 import yaml
 
+from src import guards
 from src.db import postgres as pg
 from src.extractors.appeears_client import load_dotenv
 from src.lake import r2
@@ -83,8 +84,15 @@ def scalar(conn, sql: str):
     return conn.run(sql)[0][0]
 
 
-def validate(conn, counts: dict, catalog: dict, start: int, end: int, cfg: dict | None = None) -> Report:
+def validate(conn, counts: dict, catalog: dict, start: int, end: int, cfg: dict | None = None,
+             previous: dict | None = None, allow_empty: tuple | list = ()) -> Report:
     rep = Report()
+    dropped = guards.dropped_to_zero(counts, previous or {}, allow_empty)
+    rep.check("no table lost all its rows compared with the previous load", not dropped,
+              guards.message(dropped, previous or {}, "database") if dropped else "")
+    if cfg and "gaez_grid" in cfg:
+        rep.check("gaez_grid: not empty (the nationwide grid is enabled in config.yaml)",
+                  counts.get("gaez_grid", 0) > 0 or "gaez_grid" in allow_empty)
     for t, n in counts.items():
         exp = catalog["datasets"].get(t, {}).get("rows")
         if exp is not None:
@@ -202,6 +210,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--check-server", action="store_true",
                     help="only report whether the target server is fit for the load (version, encoding, rights, TLS)")
     ap.add_argument("--dsn", help="override DATABASE_URL")
+    ap.add_argument("--allow-empty", nargs="*", default=[], metavar="TABLE",
+                    help="tables that may end up empty although the previous load had rows in them")
     ap.add_argument("--workdir", help="where to download R2 objects (default: new temp dir)")
     args = ap.parse_args(argv)
 
@@ -233,6 +243,8 @@ def main(argv: list[str] | None = None) -> int:
         conn.run(f"SET search_path TO {pg.SCHEMA}, public")
 
         silver_root, manifest, catalog = open_silver()
+        prev = conn.run("SELECT row_counts FROM pipeline_run ORDER BY loaded_at DESC LIMIT 1")
+        previous = json.loads(prev[0][0]) if prev and isinstance(prev[0][0], str) else (prev[0][0] if prev else {})
         t0 = time.time()
         counts: dict[str, int] = {}
         conn.run("START TRANSACTION")
@@ -246,7 +258,7 @@ def main(argv: list[str] | None = None) -> int:
             for t, n in counts.items():
                 print(f"  {t:<22}{n:>10,}")
             print("\nChecks")
-            rep = validate(conn, counts, catalog, cfg["start_year"], cfg["end_year"], cfg)
+            rep = validate(conn, counts, catalog, cfg["start_year"], cfg["end_year"], cfg, previous, args.allow_empty)
             if rep.failed:
                 conn.run("ROLLBACK")
                 print(f"\n{rep.failed}/{rep.total} checks FAILED: rolled back, database unchanged.")
