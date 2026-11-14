@@ -75,6 +75,9 @@ def test_migrate_copy_and_constraints(tmp_path):
         pg.copy_csv(conn, "power_daily", csv("p.csv",
             "region_id,date,T2M,T2M_MAX,T2M_MIN,PRECTOTCORR,RH2M,WS2M,ALLSKY_SFC_SW_DWN,GWETROOT,GWETTOP\n"
             "r1,2015-01-01,15.2,21.4,10.1,0.0,73.6,2.9,16.1,0.68,\n"))
+        top = conn.run("SELECT crop_code, rank FROM v_crop_ranking WHERE region_id='r1' ORDER BY rank")
+        assert top == [["RCW", 1], ["MZE", 2]]
+        assert conn.run("SELECT gwettop IS NULL, name_verified FROM power_daily, dim_crop WHERE crop_code='MZE'") == [[True, False]]
         # rain QA (migration 002): a removed day has NULL rain + a reason; a reason with a value is rejected
         pg.copy_csv(conn, "power_daily", csv("p2.csv",
             "region_id,date,T2M,PRECTOTCORR,PRECTOTCORR_QA\n"
@@ -90,9 +93,6 @@ def test_migrate_copy_and_constraints(tmp_path):
         assert conn.run("SELECT hrlm, lrlm FROM gaez_grid WHERE crop_code = 'RCW'") == [[7600, None]]
         with pytest.raises(Exception):   # out-of-range value -> CHECK
             pg.copy_csv(conn, "gaez_grid", csv("gg2.csv", "lat,lon,crop_code,hilm\n10.55,105.35,RCW,10001\n"))
-        top = conn.run("SELECT crop_code, rank FROM v_crop_ranking WHERE region_id='r1' ORDER BY rank")
-        assert top == [["RCW", 1], ["MZE", 2]]
-        assert conn.run("SELECT gwettop IS NULL, name_verified FROM power_daily, dim_crop WHERE crop_code='MZE'") == [[True, False]]
         with pytest.raises(Exception):   # unknown region -> foreign key
             pg.copy_csv(conn, "power_monthly", csv("m.csv", "region_id,month\nnope,2015-01\n"))
         with pytest.raises(Exception):   # out-of-range value -> CHECK
