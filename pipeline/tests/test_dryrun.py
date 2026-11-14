@@ -36,7 +36,7 @@ def test_ddl_types_and_translation_cover_every_table():
     assert types["power_daily"]["prectotcorr_qa"] == "text"          # added by ALTER in 002
     assert types["gaez_grid"]["hrlm"] == "smallint" and types["gaez_grid"]["lat"] == "double precision"
     ddl, views = dryrun.translate(stmts, pg.LOAD_ORDER)
-    assert sum(s.startswith("CREATE TABLE") for s in ddl) == 14 and len(views) == 2
+    assert sum(s.startswith("CREATE TABLE") for s in ddl) == 16 and len(views) == 2
     assert not any(" ~ " in s for s in ddl)
 
 
@@ -108,3 +108,17 @@ def test_gaez_grid_rows_validate(tmp_path):
     assert out_of_range["errors"]
     unknown_crop = run(tmp_path / "z", dim_crop=CROP, gaez_grid=head + "10.45,105.35,XXX,1,,,\n")
     assert unknown_crop["errors"]
+
+
+def test_rain_validation_tables_validate(tmp_path):
+    val = "region_id,year,power_mm,chirps_mm,ratio,status\n"
+    best = "region_id,month,power_mm,chirps_mm,best_mm,best_source\n"
+    ok = run(tmp_path, dim_region=REGION, rain_validation=val + "r1,2020,2031.0,896.0,2.266,power_high\n",
+             rain_monthly_best=best + "r1,2020-01,50.0,40.0,40.0,chirps\nr1,2020-02,30.0,,30.0,power_fallback\n")
+    assert ok["errors"] == [] and ok["counts"]["rain_monthly_best"] == 2
+    bad_status = run(tmp_path / "a", dim_region=REGION, rain_validation=val + "r1,2020,1.0,1.0,1.0,maybe\n")
+    assert bad_status["errors"]
+    wrong_best = run(tmp_path / "b", dim_region=REGION, rain_monthly_best=best + "r1,2020-01,50.0,40.0,50.0,chirps\n")
+    assert wrong_best["errors"]          # best_mm must equal chirps_mm when best_source = chirps
+    negative = run(tmp_path / "c", dim_region=REGION, rain_monthly_best=best + "r1,2020-01,,-1.0,-1.0,chirps\n")
+    assert negative["errors"]

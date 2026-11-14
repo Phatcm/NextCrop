@@ -8,10 +8,12 @@ from dataclasses import asdict
 from pathlib import Path
 
 from src.models import NdviPoint, Region
+from src.transformers import rain_validation
 from src.transformers.climate import annual_anomalies, grid_cells, monthly_normals, ndvi_profile
 
 SCHEMA_VERSION = "0.3"   # 0.3: + suitability (GAEZ); silver ndvi tables unified with a source_key column
-# additive changes since 0.3 (no bump): climate.rain_qa in gold, prectotcorr_qa in silver power_daily
+# additive changes since 0.3 (no bump): climate.rain_qa in gold, prectotcorr_qa in silver power_daily,
+# climate.rain_best in gold + silver rain_validation / rain_monthly_best (CHIRPS, DATA-06/07)
 
 
 def _now() -> str:
@@ -58,7 +60,7 @@ def landcover_check(lc: dict | None, min_cropland: float = 0.5) -> dict | None:
 def build_region_gold(region: Region, start_year: int, end_year: int, *, power: dict | None,
                       ndvi: dict[str, dict], smap: dict | None, landcover: dict | None,
                       elevation: dict | None, power_cfg: dict, suitability: dict | None = None,
-                      rain_removed: dict | None = None) -> dict:
+                      rain_removed: dict | None = None, rain_val: dict | None = None) -> dict:
     """ndvi = {source_key: {"description", "qa", "series": [NdviPoint]}}; suitability = gaez.gold_block()."""
     lat, lon = region.center
     lc_check = landcover_check(landcover)
@@ -125,6 +127,12 @@ def build_region_gold(region: Region, start_year: int, end_year: int, *, power: 
                 gold["metadata"]["caveats"].append(
                     f"Mưa: đã loại {len(removed)} ngày POWER không được ERA5 xác nhận (" + ", ".join(
                         f"{d['date']} = {d['value_mm']:.0f} mm" for d in removed) + ").")
+    if rain_val and gold["climate"] is not None:
+        gold["climate"]["rain_best"] = rain_validation.gold_block(
+            rain_val, "CHIRPS v3 (UCSB CHC, vệ tinh 0,05 độ hiệu chỉnh bằng trạm); POWER chỉ là dự phòng")
+        msg = rain_validation.caveat(rain_val["summary"])
+        if msg:
+            gold["metadata"]["caveats"].append(msg)
     if ndvi:
         gold["ndvi"] = {"primary": primary, "sources": {}}
         for key, src in ndvi.items():
@@ -149,6 +157,10 @@ def write_region(gold_dir: Path, silver_dir: Path, gold: dict, power: dict | Non
         write_csv(silver_dir / "power_monthly.csv", tbl(power["monthly"]["rows"]))
         write_json(gold_dir / f"{rid}_climate_daily.json",
                    {"region_id": rid, "units": power["daily"]["units"], "rows": power["daily"]["rows"]})
+    rb = (gold.get("climate") or {}).get("rain_best")
+    if rb:
+        write_csv(silver_dir / "rain_validation.csv", tbl(rb["validation_by_year"]))
+        write_csv(silver_dir / "rain_monthly_best.csv", tbl(rb["monthly"]))
     # one NDVI table for all sources (source_key = modis_qa | gibs): the app/DB filters instead of joining
     if raw_obs:
         write_csv(silver_dir / "ndvi_raw.csv", tbl([{"source_key": key, **asdict(o)}

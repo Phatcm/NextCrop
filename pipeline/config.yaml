@@ -69,6 +69,15 @@ power:
       timeout_s: 60
       retries: 3
 
+# DATA-06/07: nguồn mưa độc lập (CHIRPS v3, UCSB CHC; vệ tinh 0,05 độ có hiệu chỉnh bằng trạm đo, CC0).
+# POWER lệch tới 2-3 lần ở Ninh Thuận / Sơn La và sai năm 2015 ở Đắk Lắk; app đọc mưa từ rain_monthly_best (CHIRPS).
+chirps:
+  url: "https://data.chc.ucsb.edu/products/CHIRPS/v3.0/monthly/global/tifs/chirps-v3.0.{year}.{month:02d}.tif"
+  half_window_deg: 0.075   # cửa sổ quanh tâm vùng (~3x3 ô 0,05 độ)
+rain_validation:
+  max_bias: 0.30           # POWER lệch hơn 30% so với CHIRPS (theo năm hoặc trung bình) bị đánh dấu
+  min_years: 8
+
 # Lưới khí hậu cả nước (POWER regional: tối đa 10 độ mỗi chiều, 1 tham số mỗi lần gọi).
 vn_grid:
   boxes:   # [lon_min, lat_min, lon_max, lat_max]
