@@ -1,0 +1,6 @@
+PyYAML>=6.0
+numpy>=2.0
+tifffile>=2024.1.1   # reads GeoTIFF tags only; pixels are decoded in src/geotiff.py (no GDAL / imagecodecs needed)
+boto3>=1.35          # Cloudflare R2 via the S3 API
+pg8000>=1.31         # pure-Python PostgreSQL driver (COPY supported), no libpq/DLL needed
+pytest>=8.0

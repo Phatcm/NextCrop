@@ -1,0 +1,167 @@
+# Field Shift ETL config.
+# Chiến lược: "sâu" nhiều năm cho vài vùng đại diện + "rộng" lưới khí hậu cả nước.
+# bbox = [lon_min, lat_min, lon_max, lat_max] (EPSG:4326)
+start_year: 2015   # SMAP bắt đầu 2015-03-31; 2015-2016 có El Nino mạnh (hạn, xâm nhập mặn)
+end_year: 2025
+data_dir: data
+
+# province_2025 = tỉnh sau sáp nhập 01/07/2025 (cần xác nhận lại khi trình bày).
+# status: sample = đã kiểm tra trong field-shift-example; candidate = tọa độ ước lượng,
+# phải xác nhận bằng lớp phủ đất (MCD12Q1) trong gold trước khi chốt demo.
+regions:
+  - id: thai_binh_rice
+    name: "Thái Bình - lúa 2 vụ"
+    province_2025: "Hưng Yên"
+    zone: "Đồng bằng sông Hồng"
+    bbox: [106.25, 20.40, 106.35, 20.50]
+    status: sample
+  - id: son_la_maize
+    name: "Sơn La (Mai Sơn) - ngô nương rẫy"
+    province_2025: "Sơn La"
+    zone: "Trung du miền núi phía Bắc"
+    bbox: [104.05, 21.10, 104.15, 21.20]
+    status: candidate
+  - id: ninh_thuan_dryland
+    name: "Ninh Thuận (Phan Rang) - vùng khô hạn"
+    province_2025: "Khánh Hòa"
+    zone: "Duyên hải Nam Trung Bộ"
+    bbox: [108.90, 11.55, 109.00, 11.65]
+    status: candidate
+  - id: dak_lak_coffee
+    name: "Đắk Lắk - cà phê"
+    province_2025: "Đắk Lắk"
+    zone: "Tây Nguyên"
+    bbox: [108.00, 12.60, 108.10, 12.70]
+    status: candidate
+  - id: an_giang_rice
+    name: "An Giang - lúa 3 vụ"
+    province_2025: "An Giang"
+    zone: "ĐBSCL (nội đồng)"
+    bbox: [105.30, 10.40, 105.40, 10.50]
+    status: candidate
+  - id: soc_trang_rice_shrimp
+    name: "Sóc Trăng (Mỹ Xuyên) - lúa-tôm, xâm nhập mặn"
+    province_2025: "Cần Thơ"
+    zone: "ĐBSCL (ven biển)"
+    bbox: [105.90, 9.50, 106.00, 9.60]
+    status: candidate
+
+power:
+  base_url: "https://power.larc.nasa.gov/api/temporal"
+  community: AG
+  time_standard: LST   # ngày theo giờ địa phương; ghi lại trong metadata
+  parameters: [T2M, T2M_MAX, T2M_MIN, PRECTOTCORR, RH2M, WS2M, ALLSKY_SFC_SW_DWN, GWETROOT, GWETTOP]
+  timeout_s: 180
+  retries: 3
+
+# Lưới khí hậu cả nước (POWER regional: tối đa 10 độ mỗi chiều, 1 tham số mỗi lần gọi).
+vn_grid:
+  boxes:   # [lon_min, lat_min, lon_max, lat_max]
+    - [102.0, 16.0, 110.0, 23.5]
+    - [102.0, 8.5, 110.0, 16.0]
+  parameters: [T2M, T2M_MAX, T2M_MIN, PRECTOTCORR, RH2M, ALLSKY_SFC_SW_DWN, GWETROOT]
+
+# Nguồn NDVI dự phòng không cần tài khoản (ảnh màu, không có QA gốc).
+gibs:
+  wms_url: "https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi"
+  layer: "MODIS_Terra_L3_NDVI_16Day"
+  colormap_url: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/MODIS_L3_NDVI.xml"
+  years: [2023, 2024, 2025]
+  size_px: 40
+  timeout_s: 60
+  retries: 3
+  workers: 4
+  qa:   # quy tắc tự định nghĩa cho vùng lúa (FIELD-SHIFT-NOTES 3.3)
+    cloud_ndvi_below: 0.10
+    min_valid_frac: 0.90
+    max_cloud_frac: 0.50
+    min_median: 0.20
+    max_drop_vs_neighbors: 0.50
+
+# Cloudflare R2. Khóa và tên bucket nằm trong .env (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
+# R2_SECRET_ACCESS_KEY, R2_BUCKET); giá trị dưới đây chỉ là mặc định khi R2_BUCKET không đặt.
+r2:
+  bucket: field-shift-nasa
+  workers: 8
+
+# FAO GAEZ v5 RES05-SXX30AS (mức thích hợp cây trồng 0-10000, ~0,9 km). Đọc cửa sổ qua HTTP,
+# không tải cả file 150 MB. Mã cây (3 chữ) đã đối chiếu với cổng GAEZ, xem docs/gaez-notes.md.
+gaez:
+  period: HP0120      # 2001-2020
+  climate: AGERA5
+  ssp: HIST
+  modes: [HILM, HRLM, LILM, LRLM]   # tưới/mưa x đầu vào cao/thấp
+  workers: 4
+  crops:
+    - {code: RCW,   name_vi: "Lúa nước"}
+    - {code: RCD,   name_vi: "Lúa cạn"}
+    - {code: MZE,   name_vi: "Ngô"}
+    - {code: CSV,   name_vi: "Sắn"}
+    - {code: SPO,   name_vi: "Khoai lang"}
+    - {code: WPO,   name_vi: "Khoai tây"}
+    - {code: TAROW, name_vi: "Khoai sọ ruộng nước"}
+    - {code: SOY,   name_vi: "Đậu tương"}
+    - {code: GRD,   name_vi: "Lạc"}
+    - {code: COW,   name_vi: "Đậu đũa"}
+    - {code: SES,   name_vi: "Vừng"}
+    - {code: ONI,   name_vi: "Hành"}
+    - {code: COF,   name_vi: "Cà phê"}
+    - {code: RUB,   name_vi: "Cao su"}
+    - {code: TEA,   name_vi: "Chè"}
+    - {code: CSH,   name_vi: "Điều"}
+    - {code: CON,   name_vi: "Dừa"}
+    - {code: OLP,   name_vi: "Cọ dầu"}
+    - {code: SUC,   name_vi: "Mía", name_verified: false}   # số khớp cổng, tên chưa xác nhận chính thức
+    - {code: BAN,   name_vi: "Chuối"}
+    - {code: CIT,   name_vi: "Cây có múi"}
+    - {code: CAB,   name_vi: "Bắp cải"}
+    - {code: TOM,   name_vi: "Cà chua"}
+    - {code: WMEL,  name_vi: "Dưa hấu"}
+
+# GFSAD30SEACE: đất canh tác 30 m năm 2015. Dùng để chỉ giữ điểm MODIS 250 m "thuần ruộng".
+# Tile tải tự động qua Earthdata; nếu mạng chặn urs.earthdata.nasa.gov thì tải tay và
+# bỏ file .tif vào data/bronze/gfsad/ (xem README).
+gfsad:
+  crop_values: [2]          # mã lớp đất canh tác; kiểm tra lại bằng "classes" trong gold
+  footprint_m: 250          # kích thước pixel MODIS MOD13Q1
+  min_point_crop_frac: 0.6  # điểm MODIS có >= 60% pixel 30 m là đất canh tác mới được dùng
+  min_points: 5             # ít hơn thì không lọc (dùng tất cả điểm) và ghi cảnh báo
+
+appeears:
+  base_url: "https://appeears.earthdatacloud.nasa.gov/api"
+  grid_n: 5            # lưới 5x5 điểm trong mỗi bbox
+  poll_s: 30
+  max_wait_s: 5400
+  tasks:
+    - key: ndvi
+      product: "MOD13Q1.061"
+      layers: ["_250m_16_days_NDVI", "_250m_16_days_pixel_reliability", "_250m_16_days_VI_Quality"]
+      points: grid
+      start: "01-01-{start_year}"
+      end: "12-31-{end_year}"
+    - key: smap
+      product: "SPL3SMP_E.006"
+      layers: ["Soil_Moisture_Retrieval_Data_AM_soil_moisture", "Soil_Moisture_Retrieval_Data_AM_retrieval_qual_flag"]
+      points: center    # SMAP 9 km: 1 điểm/vùng là đủ
+      start: "03-31-2015"
+      end: "12-31-{end_year}"
+    - key: landcover
+      product: "MCD12Q1.061"
+      layers: ["LC_Type1"]
+      points: grid
+      start: "01-01-{start_year}"
+      end: "12-31-{end_year}"
+    - key: dem
+      product: "NASADEM_NC.001"
+      layers: ["NASADEM_HGT"]
+      points: grid
+      start: "02-11-2000"
+      end: "02-21-2000"
+  # QA cho NDVI MODIS: dùng pixel_reliability (0 tốt, 1 tạm được) thay cho quy tắc màu.
+  # Không dùng min_median / sụt mạnh: ruộng ngập nước khi cấy có NDVI thấp thật.
+  ndvi_qa:
+    accept_reliability: [0, 1]
+    min_valid_frac: 0.30
+    max_cloud_frac: 0.70
+    min_median: null
+    max_drop_vs_neighbors: null

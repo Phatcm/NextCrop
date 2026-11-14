@@ -1,34 +1,41 @@
-# Hợp đồng dữ liệu giữa pipeline và app (NHÁP, cần Phat và Hùng chốt)
+# Hợp đồng dữ liệu giữa pipeline và app (v1, thay bản nháp "file tĩnh trên R2")
 
-App chỉ đọc file tĩnh trên Cloudflare R2. Gợi ý để hai bên làm song song:
+Quyết định: **app đọc từ PostgreSQL**. Pipeline lưu dữ liệu ở Cloudflare R2 (data lake) rồi nạp vào Postgres bằng `pipeline/load_postgres.py`. App không gọi API NASA/FAO lúc chạy.
 
 ```
-<R2 public base>/index.json                     danh sách vị trí và phiên bản dữ liệu
-<R2 public base>/locations/<id>.json            dữ liệu một vị trí
-<R2 public base>/suitability/<region>.json      (tùy chọn) bảng thích hợp theo cây x mức cho vùng
+pipeline/run_etl.py -> data/{bronze,silver,gold} -> pipeline/upload_r2.py -> R2 -> pipeline/load_postgres.py -> PostgreSQL
 ```
 
-`locations/<id>.json` (đề xuất, chưa cố định):
-```json
-{
-  "id": "thai-binh",
-  "name": "Thái Bình",
-  "lat": 20.45, "lon": 106.30,
-  "climate": {
-    "source": "NASA POWER",
-    "monthly": { "T2M": [], "PRECTOTCORR": [], "GWETROOT": [] },
-    "units": { "T2M": "C", "PRECTOTCORR": "mm/day", "GWETROOT": "1" }
-  },
-  "ndvi": [
-    { "date": "2023-04-23", "value": 0.70, "flag_bad": false, "source": "observed" }
-  ],
-  "suitability": {
-    "source": "FAO GAEZ v5 RES05-SXX30AS, 2001-2020",
-    "values": { "RCW": { "HILM": 0, "HRLM": 0, "LILM": 0, "LRLM": 0 } },
-    "note": "0-10000, cao = hợp hơn; mức đầu vào ảnh hưởng mạnh"
-  },
-  "meta": { "generated_at": "", "pipeline_version": "" }
-}
-```
+## Schema PostgreSQL `field_shift`
+Nguồn thật là [pipeline/db/migrations/001_init.sql](../pipeline/db/migrations/001_init.sql) (có chú thích từng bảng). App nên đặt `search_path = field_shift`.
 
-Điều cần chốt: danh sách vị trí hero, đơn vị thời gian của khí hậu (tháng hay ngày), cách tính giá trị thích hợp (một pixel hay trung bình vùng nhỏ), cách đánh dấu ngày NDVI hỏng, tên bucket R2 và đường dẫn công khai.
+| Bảng | Khóa | Nội dung |
+|---|---|---|
+| `dim_region` | `region_id` | vùng demo: bbox, tỉnh, vùng sinh thái, kết quả kiểm tra đất canh tác (MODIS và GFSAD) |
+| `dim_crop` | `crop_code` | 24 cây GAEZ, tên tiếng Việt, `name_verified` |
+| `power_daily`, `power_monthly` | `region_id` + ngày/tháng | khí hậu NASA POWER 2015–2025 |
+| `ndvi_series` | `region_id, source_key, date` | NDVI sau QA, `source` = `measured` / `interpolated` / `missing` |
+| `ndvi_raw` | như trên | NDVI trước nội suy, kèm `valid_frac`, `cloud_frac` |
+| `smap_daily` | `region_id, date` | độ ẩm đất SMAP; `sm_recommended` là NULL khi NASA không khuyến nghị |
+| `gaez_suitability` | `region_id, crop_code, input_mode, period, ssp` | mức thích hợp 0–10000, 4 mức đầu vào |
+| `gfsad_points`, `landcover_by_year`, `landcover_classes`, `terrain` | theo vùng | đất canh tác 30 m, lớp phủ MODIS, độ cao |
+| `vn_grid_monthly` | `lat, lon, param, yyyymm` | lưới khí hậu cả nước (cho bản đồ) |
+| `pipeline_run` | `run_id` | lần nạp nào đang nằm trong DB |
+
+View cho app: `v_region_overview` (một dòng mỗi vùng kèm số liệu đủ/thiếu), `v_crop_ranking` (xếp hạng cây theo vùng và mức đầu vào).
+
+## Quy ước app phải tuân theo
+- Ô thiếu dữ liệu là `NULL`, **không bao giờ là 0**. NDVI có `source = 'interpolated'` là giá trị nội suy, phải hiển thị khác với giá trị đo.
+- Mức đầu vào GAEZ: `HILM` tưới + đầu vào cao, `HRLM` mưa + cao, `LILM` tưới + thấp, `LRLM` mưa + thấp. Chênh lệch giữa các mức rất lớn (lúa nước An Giang: 8.460 ở `HRLM`, 2.472 ở `LRLM`), không so sánh khác mức với nhau. Chỉ số **không đơn điệu** theo mức đầu vào: ở 22/144 cặp vùng-cây, `LRLM` cao hơn `HRLM` (ví dụ cà phê Đắk Lắk 3.331 so với 2.420), nên đừng giả định đầu vào cao luôn tốt hơn.
+- Chỉ số GAEZ là tiềm năng trung bình 20 năm, **không** nhận diện cây bằng một con số (nhiều cây có thể trùng giá trị).
+- `dim_region.status = 'candidate'`: tọa độ chưa xác nhận ngoài thực địa.
+- Mỗi vùng là một khung ~0,1° (~11 km); dữ liệu POWER ~0,5° nên không phân biệt từng thửa ruộng.
+
+## R2
+Cấu trúc bucket, manifest và catalog: xem `pipeline/README.md` (mục Cloudflare R2). Bản JSON "gold" (`gold/v<schema>/<vùng>.json`) vẫn được tạo, dùng khi cần xuất file tĩnh hoặc kiểm tra nhanh; không phải đường đọc chính của app.
+
+## Còn thiếu so với hợp đồng gốc
+Bảng cây trồng (mùa trồng, thời gian sinh trưởng, ngưỡng nhiệt, nhu cầu nước, họ đậu, độ phủ đất, giá thị trường, họ thực vật) chưa có trong dữ liệu. Kết quả kiểm tra đầy đủ và các vấn đề độ chính xác: [data-audit.md](data-audit.md).
+
+## Điều cần chốt (Phat và Hùng)
+Danh sách vùng demo cuối cùng (hiện có 6 vùng, 5 vùng còn là `candidate`); cách app truy cập Postgres (kết nối trực tiếp hay qua API); phiên bản Postgres và nhà cung cấp; có cần `R2_PUBLIC_BASE_URL` cho file tĩnh hay không.

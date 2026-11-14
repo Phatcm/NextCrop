@@ -12,9 +12,9 @@ Người dùng chọn vị trí, cây hiện tại và ưu tiên (tiết kiệm 
 
 ## Cấu trúc repo
 ```
-app/        ứng dụng web (đọc file dữ liệu tĩnh, không gọi API ngoài lúc chạy)
-pipeline/   lấy, xử lý, đóng gói dữ liệu; đẩy kết quả lên Cloudflare R2
-docs/       ghi chú dữ liệu (GAEZ) và hợp đồng dữ liệu giữa pipeline và app (nháp)
+app/        ứng dụng web (đọc dữ liệu từ PostgreSQL, không gọi API ngoài lúc chạy)
+pipeline/   lấy, xử lý, đóng gói dữ liệu; đẩy lên Cloudflare R2 và nạp vào PostgreSQL
+docs/       ghi chú dữ liệu (GAEZ) và hợp đồng dữ liệu giữa pipeline và app (v1: PostgreSQL)
 ```
 
 ## Nguồn dữ liệu
