@@ -92,6 +92,7 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 
   Giữ lại vì ERA5 xác nhận: Thái Bình 2024-09-07 (155 mm so với ERA5 144 mm, bão Yagi), 2024-09-10/11 (132/127 mm so với 120 mm), Thái Bình 2022-09-08 (105/59), 2025-07-22 (106/84), Ninh Thuận 2018-11-18 (101/61).
 - **Giới hạn cần nói khi trình bày:** ERA5 cũng là tái phân tích (0,25°), không phải số đo trạm, và có thể bỏ sót mưa đối lưu cục bộ; ba ca "ranh giới" (103–127 mm) có thể là mưa thật mà ERA5 không thấy. Không có số liệu trạm trong dự án để phân xử. Muốn thận trọng hơn: nâng `candidate_mm` lên 150 (chỉ xét ngày thật sự cực đoan) hoặc hạ `min_ratio` xuống 0,3.
+- **Cải thiện sau (đã hoãn, 14/11):** ERA5 chỉ là tái phân tích, chưa phải số đo. Để phân xử 3 ca ranh giới nên đối chiếu thêm nguồn độc lập: **GPM IMERG** (NASA, vệ tinh hiệu chỉnh bằng trạm, nằm trong danh sách nguồn của đề, cần Earthdata; **[CHƯA KIỂM CHỨNG]** cách truy cập) hoặc trạm **NOAA GHCN-Daily** gần 6 vùng (**[CHƯA KIỂM CHỨNG]** có trạm đủ gần và đủ 2015–2025 không). Chỉ cần kiểm khoảng 9 ngày bị loại và vài ngày bị giữ. Cũng nên dùng chuỗi ERA5 đã cache trong `bronze/era5` để làm DATA-06/07 (so tổng mưa năm của POWER với ERA5 cho 6 vùng), không cần tải thêm.
 - **Chưa xử lý:** lưới khí hậu cả nước (`vn_grid_monthly`) là dữ liệu tháng nên không áp được quy tắc theo ngày; ô lưới chứa An Giang vẫn mang số tháng 6/2020 cao bất thường.
 
 ### DATA-06 · Cao · Ninh Thuận 1.961 mm/năm, nhiều khả năng quá cao
