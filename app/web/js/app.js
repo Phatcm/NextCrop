@@ -3,7 +3,7 @@
 import * as api from "./api.js";
 import {
   CLASSES, STEP, classOf, findProvince, provinceBounds, provinceCentroid, expandBounds, cellOf, cellRing,
-  selectCells, nearestInside, countByClass, tradeoff, nameOf, esc,
+  selectCells, nearestInside, countByClass, tradeoff, nameOf, esc, niceRange, linePath, bandPath, peakMonth,
 } from "./lib.js";
 import { LANGS, detectLang, getLang, setLangState, t } from "./i18n.js";
 
@@ -16,6 +16,7 @@ const EXAMPLE = { shape: "An Giang", lat: 10.45, lon: 105.35, crop: "RCW", n: nu
 const st = {
   ...EXAMPLE, lang: "vi", move: null, hide: new Set(), tab: "res", confirmed: false, outside: false,
   crops: [], features: null, result: null, error: null, loading: false, cells: [],
+  cardTab: "sum", nasa: null, nasaState: "idle", nasaKey: null, nasaErr: null,   // right card: summary | nasa
   layerState: "idle",                                          // idle | loading | ready | empty | error (the cell layer)
   navSeq: 0,                                                   // a newer navigation cancels an older, slower one
 };
@@ -145,6 +146,19 @@ const params = () => ({
   min_index: $("minidx").value, gap_rice: numOrNull($("gr")), gap_other: numOrNull($("go")), lang: st.lang,
 });
 
+let nasaCtl = null;
+function ensureNasa(force = false) {
+  if (st.cardTab !== "nasa" || st.outside) return;
+  const c = cellOf(st.lat, st.lon), key = `${c.i},${c.j}`;
+  if (!force && st.nasaKey === key) return;
+  st.nasaKey = key; st.nasaState = "loading"; st.nasaErr = null;
+  renderCard();
+  nasaCtl?.abort(); nasaCtl = new AbortController();
+  api.nasa({ lat: st.lat, lon: st.lon }, nasaCtl.signal)
+    .then((d) => { if (st.nasaKey === key) { st.nasa = d; st.nasaState = "ready"; renderCard(); } })
+    .catch((e) => { if (e.name !== "AbortError" && st.nasaKey === key) { st.nasa = null; st.nasaErr = e; st.nasaState = "error"; renderCard(); } });
+}
+
 async function loadOptions() {
   const seq = ++optSeq;
   optCtl?.abort();
@@ -152,6 +166,7 @@ async function loadOptions() {
   if (st.outside) { st.result = null; st.error = null; st.loading = false; renderAll(); return; }
   st.loading = true;
   renderResults();
+  ensureNasa();
   try {
     const r = await api.options(params(), optCtl.signal);
     if (seq !== optSeq) return;
@@ -387,8 +402,72 @@ function renderCrops() {
     + `<div class="grp">${t("sel.perennial")}</div>${perennial.map(row).join("")}`;
 }
 
+// ---- right card: "Summary" (cells by level) and "NASA" (climate and greenness of the place), one card, two tabs
+const cardTabs = () => {
+  const tab = (k, key) => `<button type="button" role="tab" data-ctab="${k}" aria-selected="${st.cardTab === k}">${t(key)}</button>`;
+  return `<div class="ctabs" role="tablist">${tab("sum", "card.tabSum")}${tab("nasa", "card.tabNasa")}</div>`;
+};
+const monthName = (m) => new Intl.DateTimeFormat(getLang(), { month: "long" }).format(new Date(2021, m - 1, 1));
+
+/** One small chart of 12 months: a line with a min-max band, or bars. Values per month number (1-12), null if missing. */
+function chartSvg({ mean, lo, hi, bars, color, aria, zero = false, digits = 0 }) {
+  const W = 380, H = 136, L = 38, R = 8, TOP = 8, BOT = 20;
+  const all = [...Object.values(bars ?? mean), ...Object.values(lo ?? {}), ...Object.values(hi ?? {})].filter(Number.isFinite);
+  const ax = niceRange(Math.min(...all), Math.max(...all), 5, zero);
+  const slot = (W - L - R) / 12;
+  const x = (m) => L + slot * (m - 0.5), y = (v) => TOP + (1 - (v - ax.min) / (ax.max - ax.min)) * (H - TOP - BOT);
+  const pts = (obj) => Array.from({ length: 12 }, (_, i) => (Number.isFinite(obj?.[i + 1]) ? { x: x(i + 1), y: y(obj[i + 1]) } : null));
+  const grid = ax.ticks.map((v) => `<line x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" class="gl"/><text x="${L - 5}" y="${(y(v) + 3.5).toFixed(1)}" text-anchor="end">${v.toFixed(digits)}</text>`).join("");
+  const xs = Array.from({ length: 12 }, (_, i) => `<text x="${x(i + 1).toFixed(1)}" y="${H - 5}" text-anchor="middle">${i + 1}</text>`).join("");
+  let body = "";
+  if (bars) {
+    body = Object.entries(bars).map(([m, v]) => `<rect x="${(x(+m) - slot * 0.34).toFixed(1)}" y="${y(v).toFixed(1)}" width="${(slot * 0.68).toFixed(1)}" height="${(y(ax.min) - y(v)).toFixed(1)}" fill="${color}"><title>${monthName(+m)}: ${v}</title></rect>`).join("");
+  } else {
+    const band = lo && hi ? bandPath(pts(hi), pts(lo)) : "";
+    body = (band ? `<path d="${band}" fill="${color}" opacity=".18"/>` : "")
+      + `<path d="${linePath(pts(mean))}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linejoin="round"/>`
+      + pts(mean).map((p, i) => (p ? `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.6" fill="${color}"><title>${monthName(i + 1)}: ${mean[i + 1]}</title></circle>` : "")).join("");
+  }
+  return `<svg class="nchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(aria)}">${grid}${body}${xs}</svg>`;
+}
+const byMonth = (rows, field) => Object.fromEntries(rows.map((r) => [r.m, r[field]]));
+
+function nasaHtml() {
+  if (st.outside) return `<div class="hint">${t("card.outside")}</div>`;
+  if (st.nasaState === "idle" || st.nasaState === "loading") return `<div class="hint">${t("nasa.loading")}</div>`;
+  if (st.nasaState === "error") {
+    return st.nasaErr?.code === "no_data" ? `<div class="hint">${t("nasa.noData")}</div>`
+      : `<div class="hint">${t("nasa.error")} <button type="button" class="small" data-retry-nasa>${t("retry")}</button></div>`;
+  }
+  const d = st.nasa, T = d.temperature, A = d.demo_area, years = T.years ?? ["?", "?"];
+  const sec = (title, note, svg, line) => `<div class="nsec"><h5>${esc(title)}</h5>${svg}<p class="hint">${esc(note)}</p>${line ? `<p class="nline">${esc(line)}</p>` : ""}</div>`;
+  const tMean = byMonth(T.months, "mean"), warm = peakMonth(tMean);
+  let h = `<p class="hint nintro">${esc(t("nasa.intro", { y0: years[0], y1: years[1] }))}</p>`;
+  h += sec(t("nasa.tempTitle"), t("nasa.tempNote"),
+    chartSvg({ mean: tMean, lo: byMonth(T.months, "min"), hi: byMonth(T.months, "max"), color: "#c8553d", aria: t("nasa.tempTitle"), digits: 0 }),
+    warm ? t("nasa.warmest", { month: monthName(warm.m), v: warm.v }) : "");
+  if (A) {
+    h += `<p class="hint">${esc(t("nasa.area", { name: A.name, km: A.distance_km }))}</p>`;
+    const rain = byMonth(A.rain.months, "mm"), wet = peakMonth(rain);
+    if (A.rain.months.length) h += sec(t("nasa.rainTitle"), t("nasa.rainNote"), chartSvg({ bars: rain, color: "#2f6fa3", aria: t("nasa.rainTitle"), zero: true }),
+      wet ? t("nasa.wettest", { month: monthName(wet.m), v: wet.v }) : "");
+    const nd = byMonth(A.ndvi.months, "mean"), green = peakMonth(nd);
+    if (A.ndvi.months.length) h += sec(t("nasa.ndviTitle"), t("nasa.ndviNote"),
+      chartSvg({ mean: nd, lo: byMonth(A.ndvi.months, "min"), hi: byMonth(A.ndvi.months, "max"), color: "#2e7d4f", aria: t("nasa.ndviTitle"), digits: 1 }),
+      green ? t("nasa.greenest", { month: monthName(green.m), v: green.v }) : "");
+  } else {
+    h += `<p class="note">${esc(t("nasa.noArea"))}</p>`;
+  }
+  h += `<div class="nsrc"><h5>${t("nasa.srcTitle")}</h5><ul>`
+    + `<li>${esc(t("nasa.srcTemp", { lat: T.grid_cell.lat, lon: T.grid_cell.lon }))}</li>`
+    + (A ? `<li>${esc(t("nasa.srcRain"))}</li><li>${esc(t("nasa.srcNdvi"))}</li>` : "") + "</ul></div>";
+  return h;
+}
+
 function renderCard() {
-  const head = `<h4>${t("card.head")}</h4>`;
+  document.body.classList.toggle("card-wide", st.cardTab === "nasa");
+  const head = cardTabs();
+  if (st.cardTab === "nasa") { $("card").innerHTML = head + nasaHtml(); return; }
   if (st.outside) { $("card").innerHTML = `${head}<div class="hint">${t("card.outside")}</div>`; return; }
   if (st.layerState === "loading") { $("card").innerHTML = `${head}<div class="hint">${t("card.loading")}</div>`; return; }
   if (st.layerState === "error") { $("card").innerHTML = `${head}<div class="hint">${t("card.error")} <button type="button" class="small" data-retry-layer>${t("retry")}</button></div>`; return; }
@@ -535,8 +614,11 @@ function bindEvents() {
     drawCells(); renderCard();
   });
   $("card").addEventListener("click", (e) => {
+    const tab = e.target.closest("[data-ctab]");
+    if (tab) { st.cardTab = tab.dataset.ctab; mem.set("fs.ctab", st.cardTab); renderCard(); ensureNasa(); return; }
     if (e.target.closest("[data-showall]")) { st.hide.clear(); drawCells(); renderCard(); }
     else if (e.target.closest("[data-retry-layer]")) loadLayer();
+    else if (e.target.closest("[data-retry-nasa]")) ensureNasa(true);
   });
   $("res-body").addEventListener("click", (e) => {
     if (e.target.closest("[data-retry]")) { loadOptions(); loadLayer(); return; }
@@ -587,6 +669,7 @@ async function boot() {
   setLangState(lang); st.lang = lang;
   document.querySelectorAll("#langsw button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
   applyStatic(); setStaticPops();
+  st.cardTab = mem.get("fs.ctab") === "nasa" ? "nasa" : "sum";
   const savedDetail = mem.get("fs.detail");                      // detail view is the default; a saved choice wins
   if (savedDetail === null || savedDetail === "1") { $("detail").setAttribute("aria-pressed", "true"); document.body.classList.add("detail"); }
   setCollapsed("left", mem.get("fs.left") === "1", { remember: false });

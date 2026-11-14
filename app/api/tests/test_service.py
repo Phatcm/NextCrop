@@ -131,3 +131,45 @@ def test_crop_list_has_both_names_and_a_display_name():
     vi = {c["crop_code"]: c for c in svc().crop_list("vi")}
     assert en["RCW"]["name"] == "Wetland rice" and en["RCW"]["name_vi"] == "Lúa nước" and en["RCW"]["name_en"] == "Wetland rice"
     assert vi["RCW"]["name"] == "Lúa nước"
+
+
+# ---- NASA card
+def test_nasa_in_a_demo_area_has_temperature_rain_and_ndvi():
+    r = svc().nasa(10.45, 105.35)
+    assert r["location"]["cell_lat"] == 10.4583
+    assert len(r["temperature"]["months"]) == 12 and r["temperature"]["years"] == [2015, 2025]
+    assert r["temperature"]["months"][0] == {"m": 1, "mean": 25.0, "min": 20.0, "max": 31.0}
+    assert r["temperature"]["grid_cell"] == {"lat": 10.5, "lon": 105.5}
+    a = r["demo_area"]
+    assert a["region_id"] == "an_giang_rice" and a["distance_km"] < 10
+    assert [m["mm"] for m in a["rain"]["months"]][:3] == [10.0, 20.0, 30.0] and "not NASA" in a["rain"]["source"]
+    assert a["ndvi"]["months"][0] == {"m": 1, "mean": 0.51, "min": 0.3, "max": 0.8, "n": 22} and "NASA" in a["ndvi"]["source"]
+
+
+def test_nasa_far_from_every_demo_area_still_has_temperature_but_no_rain_or_ndvi():
+    r = svc().nasa(12.5, 108.0)
+    assert len(r["temperature"]["months"]) == 12 and r["demo_area"] is None
+
+
+def test_nasa_is_refused_where_there_is_no_power_cell_and_outside_the_grid():
+    with pytest.raises(ApiError) as e:
+        svc().nasa(16.0, 106.0)                                     # inside the rectangle, 400 km from any POWER cell
+    assert (e.value.status, e.value.code) == (404, "no_data")
+    with pytest.raises(ApiError) as e:
+        svc().nasa(30.0, 105.0)
+    assert (e.value.status, e.value.code) == (422, "outside_grid")
+
+
+def test_nasa_answers_are_cached_per_cell_and_keep_the_users_own_point():
+    repo = FakeRepo()
+    s = Service(repo)
+    a, b = s.nasa(10.45, 105.35), s.nasa(10.46, 105.36)             # two points in the same data cell
+    assert len([c for c in repo.calls if c[0] == "ndvi"]) == 1
+    assert a["location"]["lat"] == 10.45 and b["location"]["lat"] == 10.46
+
+
+def test_distance_km():
+    from fieldshift_api.grid import distance_km
+    assert distance_km(10, 105, 10, 105) == 0
+    assert abs(distance_km(10, 105, 11, 105) - 111.2) < 0.5
+    assert abs(distance_km(0, 105, 0, 106) - 111.2) < 0.5 and distance_km(60, 0, 60, 1) < 56

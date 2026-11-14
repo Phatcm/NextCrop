@@ -113,3 +113,40 @@ export function tradeoff(delta) {                              // `key` picks th
 }
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// ---- tiny chart helpers (no library): a "nice" axis and SVG paths
+/** Round axis limits outwards to a 1/2/2.5/5 x 10^k step. `zero` forces the axis to include 0. */
+export function niceRange(lo, hi, count = 5, zero = false) {
+  if (zero) lo = Math.min(0, lo);
+  if (!(hi > lo)) hi = lo + 1;
+  const raw = (hi - lo) / count, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((s) => s * mag).find((s) => s >= raw - 1e-12) ?? 10 * mag;
+  const min = Math.floor(lo / step + 1e-9) * step, max = Math.ceil(hi / step - 1e-9) * step;
+  const ticks = [];
+  for (let v = min; v <= max + step / 1e6; v += step) ticks.push(Math.round(v * 1e6) / 1e6);
+  return { min: Math.round(min * 1e6) / 1e6, max: Math.round(max * 1e6) / 1e6, step, ticks };
+}
+/** Path through the points; a missing point (null) breaks the line instead of being joined across. */
+export function linePath(points) {
+  let d = "", pen = false;
+  for (const p of points) {
+    if (!p) { pen = false; continue; }
+    d += `${pen ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+    pen = true;
+  }
+  return d;
+}
+/** Closed shape between an upper and a lower series (same length); months with a gap are left out. */
+export function bandPath(upper, lower) {
+  const idx = upper.map((_, i) => i).filter((i) => upper[i] && lower[i]);
+  if (idx.length < 2) return "";
+  const up = idx.map((i) => `${upper[i].x.toFixed(1)} ${upper[i].y.toFixed(1)}`);
+  const down = [...idx].reverse().map((i) => `${lower[i].x.toFixed(1)} ${lower[i].y.toFixed(1)}`);
+  return `M${up.join("L")}L${down.join("L")}Z`;
+}
+/** The month (1-12) with the highest value, or null when there are no values. */
+export function peakMonth(byMonth) {
+  let best = null;
+  for (const [m, v] of Object.entries(byMonth)) if (Number.isFinite(v) && (best === null || v > best.v)) best = { m: Number(m), v };
+  return best;
+}

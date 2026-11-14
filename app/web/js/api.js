@@ -29,4 +29,5 @@ async function get(path, params = {}, signal) {
 export const crops = (lang, signal) => get("/api/crops", { lang }, signal).then((b) => b.crops);
 export const options = (p, signal) => get("/api/options", p, signal);
 export const cells = (p, signal) => get("/api/cells", p, signal);
+export const nasa = (p, signal) => get("/api/nasa", p, signal);
 export const health = (signal) => get("/api/health", {}, signal);

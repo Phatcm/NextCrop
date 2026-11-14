@@ -26,6 +26,12 @@ VALUES = {"RCW": dict(hilm=8200, hrlm=8504, lilm=5000, lrlm=None), "RCD": dict(h
           "COF": dict(hilm=8300, hrlm=8307, lilm=4000, lrlm=None)}
 
 
+# NASA card: a coarse POWER grid, two demo areas, and their rain and NDVI
+POWER_CELLS = [(10.5, 105.5), (12.5, 108.0), (21.0, 104.0)]
+REGIONS = [{"region_id": "an_giang_rice", "name": "An Giang - lúa 3 vụ", "center_lat": 10.45, "center_lon": 105.35, "ndvi_primary": "modis_qa"},
+           {"region_id": "son_la_maize", "name": "Sơn La (Mai Sơn) - ngô", "center_lat": 21.15, "center_lon": 104.1, "ndvi_primary": "modis_qa"}]
+
+
 class FakeRepo:
     def __init__(self, ok=True, cells=None):
         self.ok, self.cells, self.calls = ok, cells if cells is not None else {CELL: VALUES}, []
@@ -40,6 +46,24 @@ class FakeRepo:
     def cell_values(self, lat, lon):
         self.calls.append(("cell_values", lat, lon))
         return self.cells.get((round(lat, 4), round(lon, 4)), {})
+
+    def power_cells(self):
+        return POWER_CELLS
+
+    def power_climatology(self, lat, lon):
+        if (lat, lon) not in POWER_CELLS:
+            return {"months": {}, "years": None}
+        return {"months": {m: {"T2M": 24.0 + m, "T2M_MIN": 19.0 + m, "T2M_MAX": 30.0 + m} for m in range(1, 13)}, "years": (2015, 2025)}
+
+    def regions(self):
+        return REGIONS
+
+    def rain_climatology(self, region_id):
+        return [(m, 10.0 * m, 11) for m in range(1, 13)] if region_id == "an_giang_rice" else []
+
+    def ndvi_climatology(self, region_id, source_key):
+        self.calls.append(("ndvi", region_id, source_key))
+        return [(m, 0.5 + m / 100, 0.3, 0.8, 22) for m in range(1, 13)] if region_id == "an_giang_rice" else []
 
     def cells_in_bbox(self, west, south, east, north, crop, mode, limit):
         rows = [(la, lo, v[crop][mode]) for (la, lo), v in self.cells.items()

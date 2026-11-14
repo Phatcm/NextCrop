@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   STEP, classOf, inPolygon, findProvince, provinceBounds, provinceCentroid, cellOf, cellCentre, cellRing,
-  selectCells, nearestInside, countByClass, tradeoff, expandBounds, esc,
+  selectCells, nearestInside, countByClass, tradeoff, expandBounds, esc, niceRange, linePath, bandPath, peakMonth,
 } from "../js/lib.js";
 
 const square = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]];
@@ -123,4 +123,21 @@ test("the shipped province file is usable: Vietnam provinces resolve, the sea an
   assert.equal(findProvince(108.0, 9.0, features), null);                 // open sea
   assert.ok(provinceBounds(features, "Sơn La"));
   assert.ok(provinceCentroid(features, "Thái Bình"));
+});
+
+test("niceRange rounds outwards to a clean step and can force zero", () => {
+  const r = niceRange(21.3, 33.8);
+  assert.ok(r.min <= 21.3 && r.max >= 33.8 && r.ticks[0] === r.min && r.ticks.at(-1) === r.max);
+  assert.equal(niceRange(12, 300, 5, true).min, 0);
+  assert.ok(niceRange(5, 5).max > 5);
+});
+
+test("linePath breaks at gaps; bandPath skips months without both edges; peakMonth finds the maximum", () => {
+  assert.equal(linePath([{ x: 0, y: 1 }, null, { x: 2, y: 3 }, { x: 4, y: 5 }]), "M0.0 1.0M2.0 3.0L4.0 5.0");
+  assert.equal(linePath([]), "");
+  const up = [{ x: 0, y: 0 }, null, { x: 2, y: 0 }], lo = [{ x: 0, y: 5 }, { x: 1, y: 5 }, { x: 2, y: 5 }];
+  assert.equal(bandPath(up, lo), "M0.0 0.0L2.0 0.0L2.0 5.0L0.0 5.0Z");
+  assert.equal(bandPath([null], [null]), "");
+  assert.deepEqual(peakMonth({ 1: 3, 2: 9, 3: NaN }), { m: 2, v: 9 });
+  assert.equal(peakMonth({}), null);
 });

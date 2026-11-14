@@ -20,6 +20,8 @@ web/        giao diện: HTML, CSS và JavaScript thuần (không build), MapLib
 ```
 Giao diện có **hai ngôn ngữ, Việt và Anh**, nút VI/EN ở đầu trang (bên trái nút "Xem chi tiết"). Ngôn ngữ mặc định theo trình duyệt (trình duyệt tiếng Việt thì tiếng Việt, còn lại tiếng Anh) và được nhớ. Chữ của giao diện nằm trong `web/js/i18n.js`; chữ do bộ sinh phương án viết lấy từ API qua tham số `lang`.
 
+Thẻ bên phải có **hai tab**: "Tóm tắt" (các ô theo mức phù hợp) và "NASA" (nhiệt độ, mưa và độ xanh NDVI theo tháng của nơi đang chọn, vẽ bằng SVG tự viết, thẻ rộng ra khi mở tab này). Dữ liệu từ `/api/nasa`; mưa và NDVI chỉ có ở sáu vùng demo, ngoài đó chỉ có nhiệt độ. Chỉ để tham khảo: khuyến nghị luân canh vẫn dựa vào FAO GAEZ, không dựa vào các số này.
+
 Quyết định (14/11, Hùng chốt): giao diện là file tĩnh do chính API phục vụ, nên một container Python là đủ và không cần CORS. Chuyển sang framework (React...) để sau cuộc thi nếu cần.
 
 ## Chạy

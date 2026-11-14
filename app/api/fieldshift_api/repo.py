@@ -24,6 +24,11 @@ class Repo(Protocol):
     def cell_values(self, lat: float, lon: float) -> dict[str, dict[str, int | None]]: ...
     def cells_in_bbox(self, west: float, south: float, east: float, north: float, crop: str, mode: str,
                       limit: int) -> list[tuple[float, float, int]]: ...
+    def power_cells(self) -> list[tuple[float, float]]: ...
+    def power_climatology(self, lat: float, lon: float) -> dict: ...
+    def regions(self) -> list[dict]: ...
+    def rain_climatology(self, region_id: str) -> list[tuple[int, float, int]]: ...
+    def ndvi_climatology(self, region_id: str, source_key: str) -> list[tuple[int, float, float, float, int]]: ...
 
 
 class PgRepo:
@@ -87,6 +92,53 @@ class PgRepo:
                          "WHERE lat BETWEEN :la AND :lb AND lon BETWEEN :oa AND :ob",
                          la=lat - t, lb=lat + t, oa=lon - t, ob=lon + t)
         return {r[0]: dict(zip(MODES, r[1:])) for r in rows}
+
+    # ---- NASA card: monthly climatology (mean over the years of the series), nothing is aggregated beyond that
+    def power_cells(self) -> list[tuple[float, float]]:
+        """Centres of the nationwide NASA POWER grid (0.5 degree cells)."""
+        with self._tx() as c:
+            rows = c.run(f"SELECT DISTINCT lat, lon FROM {SCHEMA}.vn_grid_monthly WHERE param = 'T2M'")
+        return [(float(a), float(b)) for a, b in rows]
+
+    def power_climatology(self, lat: float, lon: float) -> dict:
+        """{"months": {1: {"T2M": mean, "T2M_MIN": .., "T2M_MAX": ..}, ...}, "years": (first, last)}.
+        yyyymm = YYYY13 is POWER's annual value and is left out; -999 is POWER's fill value."""
+        with self._tx() as c:
+            rows = c.run(f"SELECT yyyymm % 100, param, avg(value) FROM {SCHEMA}.vn_grid_monthly "
+                         "WHERE lat = :la AND lon = :lo AND param IN ('T2M', 'T2M_MIN', 'T2M_MAX') "
+                         "AND yyyymm % 100 BETWEEN 1 AND 12 AND value IS NOT NULL AND value > -900 GROUP BY 1, 2",
+                         la=lat, lo=lon)
+            span = c.run(f"SELECT min(yyyymm / 100), max(yyyymm / 100) FROM {SCHEMA}.vn_grid_monthly "
+                         "WHERE lat = :la AND lon = :lo AND param = 'T2M' AND yyyymm % 100 BETWEEN 1 AND 12",
+                         la=lat, lo=lon)[0]
+        months: dict[int, dict[str, float]] = {}
+        for m, param, mean in rows:
+            months.setdefault(int(m), {})[param] = float(mean)
+        return {"months": months, "years": (int(span[0]), int(span[1])) if span[0] is not None else None}
+
+    def regions(self) -> list[dict]:
+        with self._tx() as c:
+            rows = c.run(f"SELECT region_id, name, center_lat, center_lon, ndvi_primary FROM {SCHEMA}.dim_region "
+                         "ORDER BY region_id")
+        return [{"region_id": r[0], "name": r[1], "center_lat": float(r[2]), "center_lon": float(r[3]),
+                 "ndvi_primary": r[4]} for r in rows]
+
+    def rain_climatology(self, region_id: str) -> list[tuple[int, float, int]]:
+        """(month, mean mm, years) from rain_monthly_best (CHIRPS v3, bias-corrected)."""
+        with self._tx() as c:
+            rows = c.run(f"SELECT substring(month, 6, 2)::int, avg(best_mm), count(*) FROM {SCHEMA}.rain_monthly_best "
+                         "WHERE region_id = :r GROUP BY 1 ORDER BY 1", r=region_id)
+        return [(int(m), float(v), int(n)) for m, v, n in rows]
+
+    def ndvi_climatology(self, region_id: str, source_key: str) -> list[tuple[int, float, float, float, int]]:
+        """(month, mean, min, max, n) over MEASURED composites that passed QA. Interpolated rows are not
+        measurements (see the table comment) and are left out."""
+        with self._tx() as c:
+            rows = c.run(f"SELECT EXTRACT(MONTH FROM date)::int, avg(median_final), min(median_final), "
+                         f"max(median_final), count(*) FROM {SCHEMA}.ndvi_series WHERE region_id = :r AND "
+                         "source_key = :k AND source = 'measured' AND NOT flag_bad AND median_final IS NOT NULL "
+                         "GROUP BY 1 ORDER BY 1", r=region_id, k=source_key)
+        return [(int(m), float(a), float(lo), float(hi), int(n)) for m, a, lo, hi, n in rows]
 
     def cells_in_bbox(self, west: float, south: float, east: float, north: float, crop: str, mode: str,
                       limit: int) -> list[tuple[float, float, int]]:
