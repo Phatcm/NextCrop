@@ -209,6 +209,29 @@ for rid in regions:
     print(f"   {rid:<24} wettest day {best['date']} = {f(best['prectotcorr']):>4.0f} mm (days >250 mm: {big}) | "
           f"driest year {lo} {by_year[lo]:.0f} mm, wettest year {hi} {by_year[hi]:.0f} mm")
 
+print("\n   POWER daily sums vs POWER monthly values (an outlier day shows up in both) and nationwide-grid rain extremes:")
+monthly = collections.defaultdict(list)
+for r in table("power_monthly"):
+    monthly[r["region_id"]].append(r)
+for rid in regions:
+    sums = collections.defaultdict(list)
+    for r in power[rid]:
+        sums[r["date"][:7]].append(f(r["prectotcorr"]))
+    n = bad = 0
+    for m in monthly[rid]:
+        d = sums.get(m["month"])
+        if not d or m["prectotcorr"] == "":
+            continue
+        n += 1
+        dm = sum(d) / len(d)
+        bad += abs(dm - f(m["prectotcorr"])) > 0.05 * max(dm, 0.5)
+    print(f"   {rid:<24} months compared {n}, differing by more than 5%: {bad}")
+grid = [r for r in table("vn_grid_monthly") if r["param"] == "PRECTOTCORR" and int(r["yyyymm"]) % 100 != 13 and r["value"] != ""]
+top = sorted(grid, key=lambda r: -float(r["value"]))[:3]
+print(f"   grid rain: {len(grid):,} cell-months; wettest: " + "; ".join(
+    f"{r['yyyymm']} ({r['lat']},{r['lon']}) {float(r['value']):.0f} mm/day" for r in top))
+print("   grid cell-months above 30 mm/day:", sum(float(r["value"]) > 30 for r in grid))
+
 # ---------------------------------------------------------------- H. GAEZ
 print("\n== H. GAEZ crop suitability coverage")
 for rid in regions:

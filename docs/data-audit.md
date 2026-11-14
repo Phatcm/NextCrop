@@ -52,6 +52,8 @@ Dữ liệu **nguyên vẹn và đủ** cho khí hậu, NDVI, GAEZ, lớp phủ 
 | 4 | Chốt vùng demo: xác nhận Sơn La và Đắk Lắk có phải đất canh tác không; nếu giữ Ninh Thuận làm vùng khô thì ghi chú rõ hạn chế của số mưa | Cả hai |
 | 5 | Khi trình bày: nêu rõ tỷ lệ NDVI nội suy, SMAP chất lượng thấp, GAEZ là tiềm năng (tiêu chí Validity) | Cả hai |
 
+Danh sách việc chi tiết (mã số, mức ưu tiên, cách xử lý, tiêu chí hoàn thành) và hướng dẫn bàn giao: [data-issues.md](data-issues.md).
+
 ## 5. Giới hạn của chính cuộc kiểm tra
 - Không có số liệu trạm mặt đất trong dữ liệu, nên "đúng/sai" chủ yếu dựa vào tính hợp lý và đối chiếu chéo giữa các nguồn.
 - Phép đếm đỉnh NDVI dùng ngưỡng tự chọn (giá trị tối thiểu 0,45, độ nổi 0,15).

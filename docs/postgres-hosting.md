@@ -50,5 +50,13 @@ python load_postgres.py                    # nạp từ R2
 ```
 `--dry-run` chỉ là bản mô phỏng bằng SQLite từ cùng file migration: nó bắt lỗi dữ liệu, không thay được việc thử trên server thật.
 
+## 5b. Nếu dùng Neon (đang cấu hình cho dự án này)
+Dự án đã nối với một dự án Neon (xem `.neon` ở gốc repo, không chứa bí mật; chuỗi kết nối nằm trong `.env.local` và `pipeline/.env`, đều bị `.gitignore` chặn).
+- Neon cấp **hai chuỗi**: `DATABASE_URL` (qua pooler, host có `-pooler`) và `DATABASE_URL_UNPOOLED` (trực tiếp). **Pipeline phải dùng chuỗi trực tiếp** (`DATABASE_URL` trong `pipeline/.env`): PgBouncer ở chế độ transaction có thể cấp backend khác nhau giữa các câu lệnh nên `SET search_path` của loader sẽ mất. Chuỗi pooled để riêng ở `DATABASE_URL_POOLED` cho app.
+- Mục "mã hóa TLS" của `--check-server` trước đây báo sai trên Neon (TLS kết thúc ở proxy, database luôn thấy `ssl = false`); đã sửa để xét cả socket phía client.
+- `neon init` còn tạo `neon.ts` (chính sách nhánh: nhánh phụ tự hết hạn sau 7 ngày) và `package.json` ở gốc repo. Ba file này (`neon.ts`, `package.json`, `package-lock.json`) **chưa được commit**: quyết định có giữ không, vì một `package.json` ở gốc repo có thể xung đột với dự án Node của `app/`. `neon deploy` **chưa được chạy**.
+- Đã nạp dữ liệu thật vào Neon (402.709 dòng, 19/19 kiểm tra qua). Hiện pipeline và app dùng chung role `neondb_owner`; nên tạo role chỉ đọc cho app (mục 2).
+- Phần lớn mục 3 (tường lửa, `pg_hba.conf`, VPN) không áp dụng với Neon; vẫn áp dụng mục 2 (role riêng cho pipeline và app) và mục 4.
+
 ## 6. Sao lưu
 Dữ liệu pipeline là **dữ liệu dẫn xuất**: R2 giữ bản gốc và `load_postgres.py` dựng lại database bất cứ lúc nào. Chỉ cần `pg_dump` các schema của app (người dùng, kịch bản); không cần sao lưu schema `field_shift`.

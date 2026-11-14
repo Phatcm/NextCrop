@@ -81,7 +81,7 @@ _meta/latest.json                                con trỏ tới lần đẩy m�
 
 `load_postgres.py` kéo silver từ R2 (kiểm tra sha256 từng file), áp migration, rồi `TRUNCATE` + `COPY` + kiểm tra **trong một transaction**: kiểm tra hỏng thì rollback, DB giữ nguyên dữ liệu cũ.
 
-Cấu hình server, role, mạng và TLS khi tự host: [../docs/postgres-hosting.md](../docs/postgres-hosting.md).
+Đang dùng Neon: pipeline dùng chuỗi **trực tiếp** (`DATABASE_URL`), app dùng chuỗi pooled (`DATABASE_URL_POOLED`); xem mục 5b của tài liệu bên dưới. Cấu hình server, role, mạng và TLS khi tự host: [../docs/postgres-hosting.md](../docs/postgres-hosting.md).
 
 Test tích hợp với Postgres thật: `TEST_DATABASE_URL=postgresql://... python -m pytest tests/test_postgres.py` (dùng DB dùng một lần: test xóa và tạo lại schema `field_shift`).
 

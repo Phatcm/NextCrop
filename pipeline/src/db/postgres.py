@@ -111,9 +111,13 @@ def server_report(conn) -> list[tuple[str, str, str]]:
         can = conn.run("SELECT has_database_privilege(current_user, current_database(), 'CREATE')")[0][0]
         out.append((f"role {user} can create schema {SCHEMA} in {db}", "PASS" if can else "FAIL",
                     "" if can else f"GRANT CREATE ON DATABASE {db} TO {user}"))
-    ssl_on = conn.run("SELECT coalesce((SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()), false)")[0][0]
-    out.append(("connection is encrypted (TLS)", "PASS" if ssl_on else "WARN",
-                "yes" if ssl_on else "no: add ?sslmode=require to DATABASE_URL and enable ssl on the server"))
+    ssl_db = conn.run("SELECT coalesce((SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()), false)")[0][0]
+    # A proxy in front of the database (e.g. Neon) ends TLS itself, so the database reports ssl = false
+    # even though the client link is encrypted. Check the client socket too (pg8000 internals; may be absent).
+    ssl_client = isinstance(getattr(conn, "_usock", None), ssl.SSLSocket)
+    out.append(("connection is encrypted (TLS)", "PASS" if (ssl_db or ssl_client) else "WARN",
+                ("yes (database sees TLS)" if ssl_db else "yes (client link is TLS; a proxy ends it before the database)")
+                if (ssl_db or ssl_client) else "no: add ?sslmode=require to DATABASE_URL and enable ssl on the server"))
     t = []
     for _ in range(5):
         t0 = time.perf_counter()
