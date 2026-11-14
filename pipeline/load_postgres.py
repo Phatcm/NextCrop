@@ -105,6 +105,17 @@ def validate(conn, counts: dict, catalog: dict, start: int, end: int, cfg: dict 
     rep.check("dim_crop: annual crops have a cycle length unless GAEZ has no parameters for them",
               scalar(conn, "SELECT count(*) FROM dim_crop WHERE life_cycle = 'annual' AND cycle_days_min IS NULL "
                            "AND traits_source LIKE '%Appendix 4-6 (A4-6.1%'") == 0)
+    if counts.get("rain_monthly_best"):
+        rep.check("rain: every region has CHIRPS-based monthly rain for every POWER month",
+                  scalar(conn, "SELECT count(*) FROM power_monthly p WHERE NOT EXISTS (SELECT 1 FROM rain_monthly_best b "
+                               "WHERE b.region_id = p.region_id AND b.month = p.month AND b.best_source = 'chirps')") == 0)
+        rep.check("rain: every region has yearly POWER-vs-CHIRPS validation rows",
+                  scalar(conn, "SELECT count(*) FROM dim_region r WHERE NOT EXISTS (SELECT 1 FROM rain_validation v "
+                               "WHERE v.region_id = r.region_id)") == 0)
+        rep.check("rain: rain_validation.status agrees with ratio (30% rule)",
+                  scalar(conn, "SELECT count(*) FROM rain_validation WHERE ratio IS NOT NULL AND "
+                               "((ratio > 1.3 AND status <> 'power_high') OR (ratio < 0.7 AND status <> 'power_low') "
+                               "OR (ratio BETWEEN 0.7 AND 1.3 AND status <> 'ok'))") == 0)
     rep.check("power_daily: t2m in [-10, 45] C", scalar(conn, "SELECT count(*) FROM power_daily WHERE t2m NOT BETWEEN -10 AND 45") == 0)
     rep.check("every region has NDVI from its primary source",
               scalar(conn, "SELECT count(*) FROM dim_region r WHERE r.ndvi_primary IS NOT NULL AND NOT EXISTS "

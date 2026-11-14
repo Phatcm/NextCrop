@@ -55,7 +55,8 @@ def test_migrate_copy_and_constraints(tmp_path):
     try:
         conn.run(f"DROP SCHEMA IF EXISTS {pg.SCHEMA} CASCADE")
         assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == ["001_init", "002_gaez_grid_rain_qa",
-                                                                         "003_crop_traits"]
+                                                                         "003_crop_traits",
+                                                                         "004_rain_validation"]
         assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == []        # idempotent
         conn.run(f"SET search_path TO {pg.SCHEMA}")
 
@@ -107,6 +108,12 @@ def test_migrate_copy_and_constraints(tmp_path):
             pg.copy_csv(conn, "dim_crop", csv("c4.csv",
                 "crop_code,name_vi,name_verified,life_cycle,cycle_days_min,cycle_days_max\n"
                 "CSV,Sắn,True,annual,270,210\n"))
+        # CHIRPS rain reference (migration 004)
+        pg.copy_csv(conn, "rain_monthly_best", csv("rb.csv",
+            "region_id,month,power_mm,chirps_mm,best_mm,best_source\nr1,2015-01,50.0,40.0,40.0,chirps\n"))
+        with pytest.raises(Exception):   # best_mm must equal chirps_mm for best_source = chirps
+            pg.copy_csv(conn, "rain_monthly_best", csv("rb2.csv",
+                "region_id,month,power_mm,chirps_mm,best_mm,best_source\nr1,2015-02,50.0,40.0,50.0,chirps\n"))
         with pytest.raises(Exception):   # unknown region -> foreign key
             pg.copy_csv(conn, "power_monthly", csv("m.csv", "region_id,month\nnope,2015-01\n"))
         with pytest.raises(Exception):   # out-of-range value -> CHECK

@@ -19,6 +19,7 @@ BRONZE_SOURCES = {
     "gfsad": "usgs_gfsad30seace",
     "gaez": "fao_gaez_v5",
     "era5": "open_meteo_era5",
+    "chirps": "chc_chirps_v3",
 }
 
 # Natural (primary) key of every silver dataset. Uploads are blocked if a key is not unique.
@@ -27,6 +28,8 @@ DATASET_KEYS: dict[str, list[str]] = {
     "dim_crop": ["crop_code"],
     "power_daily": ["region_id", "date"],
     "power_monthly": ["region_id", "month"],
+    "rain_validation": ["region_id", "year"],
+    "rain_monthly_best": ["region_id", "month"],
     "ndvi_series": ["region_id", "source_key", "date"],
     "ndvi_raw": ["region_id", "source_key", "date"],
     "gaez_suitability": ["region_id", "crop_code", "input_mode", "period", "ssp"],

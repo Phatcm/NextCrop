@@ -19,12 +19,13 @@ from pathlib import Path
 
 import yaml
 
-from src.extractors import appeears_client, era5_rain, gaez, gaez_grid, gfsad, gibs_ndvi, power_client
+from src.extractors import appeears_client, chirps, era5_rain, gaez, gaez_grid, gfsad, gibs_ndvi, power_client
 from src.http_client import HttpError
 from src.models import Region
 from src.transformers import appeears_transform as at
 from src.transformers.crop_traits import load_traits, merge_into_dim_crop
 from src.transformers.ndvi_qa import build_series
+from src.transformers import rain_validation as rv
 from src.transformers.rain_qa import apply_rain_qa
 from src.transformers.silver_to_gold import (build_region_gold, write_csv, write_dim_crop, write_dim_region,
                                              write_grid, write_index, write_region)
@@ -46,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--skip-gaez", action="store_true", help="skip FAO GAEZ crop suitability")
     ap.add_argument("--skip-rain-crosscheck", action="store_true",
                     help="rain QA with the fixed limit only (no ERA5 reference)")
+    ap.add_argument("--skip-chirps", action="store_true",
+                    help="skip the CHIRPS rain reference (silver rain_* tables and gold climate.rain_best are not written)")
     ap.add_argument("--skip-gaez-grid", action="store_true", help="skip the Vietnam-wide GAEZ grid (slow: ~45 min)")
     ap.add_argument("--gaez-local-dir", help="folder with already downloaded GAEZ GeoTIFFs (same file names) for the grid")
     ap.add_argument("--no-wait", action="store_true", help="don't wait for AppEEARS tasks to finish")
@@ -94,6 +97,7 @@ def main(argv: list[str] | None = None) -> int:
     # 3) per-region POWER + GIBS
     power_by: dict[str, dict] = {}
     rain_removed: dict[str, dict] = {}
+    rain_val: dict[str, dict] = {}
     gibs_by: dict[str, list] = {}
     for region in regions:
         print(f"== {region.id} ({region.name})")
@@ -120,6 +124,16 @@ def main(argv: list[str] | None = None) -> int:
             except HttpError as e:
                 problems.append(f"power {region.id}: {e}")
                 print(f"  [power] FAILED: {e}")
+        if not args.skip_chirps and "chirps" in cfg and region.id in power_by:
+            ch, cprob = chirps.fetch_monthly(cfg["chirps"], region, start, end, bronze / "chirps", offline=args.offline)
+            problems += cprob[:5] + ([f"chirps {region.id}: ... {len(cprob) - 5} more"] if len(cprob) > 5 else [])
+            if not cprob:  # never write a partial reference
+                res = rv.validate(rv.power_month_mm(power_by[region.id]["monthly"]["rows"]), ch, cfg.get("rain_validation"))
+                rain_val[region.id] = res
+                s = res["summary"]
+                print(f"  [rain-check] {s['verdict']}: POWER {s.get('mean_power_mm')} mm/yr vs CHIRPS {s.get('mean_chirps_mm')} mm/yr"
+                      f" (bias {s['bias']:+.0%}; bad years {s['bad_years']})" if s.get("bias") is not None
+                      else f"  [rain-check] {s['verdict']}")
         if not args.skip_gibs:
             years = [y for y in cfg["gibs"].get("years", []) if start <= y <= end]
             obs = []
@@ -248,6 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         g = build_region_gold(region, start, end, power=power_by.get(region.id), ndvi=ndvi, smap=sm,
                               landcover=lc.get(region.id), elevation=dem.get(region.id),
                               power_cfg=cfg["power"], rain_removed=rain_removed.get(region.id),
+                              rain_val=rain_val.get(region.id),
                               suitability=gaez.gold_block(cfg["gaez"], gaez_rows.get(region.id, [])) if "gaez" in cfg else None)
         if region.id in gf_stats:
             s = gf_stats[region.id]
