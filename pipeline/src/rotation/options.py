@@ -42,8 +42,21 @@ INDEX_SOURCE = ("Ranh giới lớp 'phù hợp trung bình' của FAO GAEZ v5 (4
                 "ghi 'thương mại không khả thi'. Chỉ số ô là trung bình có trọng số theo lớp nên chỉ xấp xỉ "
                 "(GAEZ v5 wiki, Module V).")
 GAEZ_SOURCE = "FAO GAEZ v5 RES05-SXX30AS, 2001-2020, AgERA5, historical; cell mean of ~0.9 km pixels"
-CLASSES = [(8000, "Rất phù hợp"), (6000, "Phù hợp"), (4000, "Trung bình"),
-           (2000, "Biên (thương mại không khả thi)"), (1, "Rất biên (không khả thi kinh tế)")]
+# FAO GAEZ v5 suitability classes (wiki, Module V) on the project's 0-10000 index. Returned in every result so the
+# interface can show it next to the index floor the user is choosing.
+INDEX_CLASS_TABLE = [
+    {"min_index": 8000, "max_index": 10000, "class": "Rất phù hợp", "fao_yield_pct": "80–100",
+     "meaning": "Đất tốt nhất cho sản xuất kinh tế"},
+    {"min_index": 6000, "max_index": 7999, "class": "Phù hợp", "fao_yield_pct": "60–80",
+     "meaning": "Đất tốt cho sản xuất kinh tế"},
+    {"min_index": 4000, "max_index": 5999, "class": "Trung bình", "fao_yield_pct": "40–60",
+     "meaning": "Hạn chế đáng kể về khí hậu, đất hoặc địa hình; cần giá bán cao mới có lãi"},
+    {"min_index": 2000, "max_index": 3999, "class": "Biên (thương mại không khả thi)", "fao_yield_pct": "20–40",
+     "meaning": "Thương mại không khả thi; chỉ dùng để tự cung tự cấp khi không còn đất khác"},
+    {"min_index": 1, "max_index": 1999, "class": "Rất biên (không khả thi kinh tế)", "fao_yield_pct": "dưới 20",
+     "meaning": "Sản xuất kinh tế không khả thi"},
+]
+CLASSES = [(r["min_index"], r["class"]) for r in INDEX_CLASS_TABLE]
 
 SUPPORTED_PRIORITIES = {"nitrogen": "cây họ đậu trước", "pest_cycle": "ít cặp vụ liên tiếp cùng họ trước",
                         "yield": "điểm GAEZ trung bình cao trước"}
@@ -151,6 +164,10 @@ def _describe(opt_id: str, label: str, seq: list[str], cur_code: str, crops: dic
         ups = sorted({crops[c]["name_vi"] for c in seq if crops[c]["water_regime"] == "upland"})
         risks.append(f"Cây cạn ({', '.join(ups)}) trên ruộng quen ngập: cần thoát nước và làm đất. "
                      "Chế độ nước của cây cạn là mặc định của dự án, GAEZ không phân biệt.")
+    under = [c for c in dict.fromkeys(seq) if (suit.get(c) or 0) < MIN_INDEX]
+    if under:
+        risks.append("Cây dưới ngưỡng " + str(MIN_INDEX) + " của FAO (thương mại không khả thi): " +
+                     ", ".join(f"{crops[c]['name_vi']} {suit.get(c) or 0} ({gaez_class(suit.get(c))})" for c in under) + ".")
     if comp["slack_days"] < 10:
         risks.append(f"Sát mép: chỉ còn dư {comp['slack_days']} ngày trong năm; chậm một vụ là không còn vừa.")
     risks.append("Độ dài vụ lấy giống ngắn nhất GAEZ thử; vụ thực tế có thể dài hơn và không còn vừa một năm.")
@@ -183,9 +200,26 @@ def _best_diverse(cur_code: str, n: int, replace: int, pool: list[str], crops: d
     return best
 
 
+def _floor_hint(cur_code: str, crops: dict, suit: dict, floor: int, kwargs: dict) -> dict:
+    """When fewer than 3 options survive the floor: the highest lower floor (rounded down to 100) that gives 3."""
+    cands = sorted({max(1, (suit[c] // 100) * 100) for c, cc in crops.items()
+                    if c != cur_code and _usable(cc) and suit.get(c) and 0 < suit[c] < floor}, reverse=True)
+    for cand in cands:
+        trial = generate(cur_code, crops, suit, min_index=cand, _hint=False, **kwargs)
+        if len(trial["options"]) >= 3:
+            used = sorted({gaez_class(suit.get(c)) for o in trial["options"] for c in o["sequence"] if c != cur_code})
+            return {"min_index": cand, "options_if_lowered": len(trial["options"]), "classes": used,
+                    "below_fao_floor": cand < MIN_INDEX,
+                    "message": f"Hạ ngưỡng xuống {cand} để có {len(trial['options'])} phương án (gồm cây thuộc lớp "
+                               f"{', '.join(used)}). Theo FAO, các lớp dưới 'Trung bình' không khả thi về kinh tế."}
+    return {"min_index": None, "options_if_lowered": None, "classes": [], "below_fao_floor": True,
+            "message": "Hạ ngưỡng đến mức thấp nhất vẫn không đủ 3 phương án (thiếu cây có chỉ số GAEZ dương, "
+                       "hợp chế độ nước và vừa một năm)."}
+
+
 def generate(cur_code: str, crops: dict[str, dict], suit: dict[str, int | None], *, mode: str = "hrlm",
              seasons: int | None = None, priorities: list[str] | None = None, min_index: int | None = None,
-             gap_rice: int | None = None, gap_other: int | None = None) -> dict:
+             gap_rice: int | None = None, gap_other: int | None = None, _hint: bool = True) -> dict:
     """crops: {code: {name_vi, life_cycle, is_legume, family, cycle_days_min, water_regime}} (dim_crop).
     suit: {crop_code: GAEZ index 0-10000 or None} for the clicked cell and input mode.
     gap_rice / gap_other (days between two crops) and min_index are adjustable; the values used are echoed in
@@ -205,7 +239,12 @@ def generate(cur_code: str, crops: dict[str, dict], suit: dict[str, int | None],
                    "gap_other": {"days": gaps["other"], "custom": custom["gap_other"], "source": GAP_SOURCES["other"]},
                    "min_index": {"value": floor, "custom": custom["min_index"], "source": INDEX_SOURCE}}
     base = {"current": cur_code, "mode": mode, "assumptions": assumptions, "missing": MISSING_ALWAYS,
+            "index_classes": INDEX_CLASS_TABLE, "floor_hint": None,
             "unsupported_priorities": unsupported, "warnings": [], "options": [], "skipped": []}
+    if floor < MIN_INDEX:
+        base["warnings"].append(
+            f"Ngưỡng đang đặt {floor}, thấp hơn {MIN_INDEX}: kết quả có thể gồm cây mà FAO coi là không khả thi về "
+            "kinh tế. Xem bảng lớp độ phù hợp (index_classes) và cảnh báo từng phương án.")
     if cur.get("life_cycle") != "annual" or cur.get("cycle_days_min") is None:
         base["message"] = (f"{cur['name_vi']} là cây lâu năm hoặc chưa có độ dài vụ trong dữ liệu GAEZ: "
                            "không luân canh theo vụ, không sinh phương án.")
@@ -214,8 +253,8 @@ def generate(cur_code: str, crops: dict[str, dict], suit: dict[str, int | None],
     base["current_gaez"] = {"index": cur_index, "class": gaez_class(cur_index)}
     if not cur_index or cur_index < floor:
         base["warnings"].append(
-            f"{cur['name_vi']} có chỉ số GAEZ {cur_index or 0} ({gaez_class(cur_index)}), dưới ngưỡng {floor}: "
-            "theo FAO, sản xuất thương mại ở đây không khả thi. Các phương án thay thế chỉ gồm cây từ ngưỡng trở lên.")
+            f"{cur['name_vi']} có chỉ số GAEZ {cur_index or 0} (lớp: {gaez_class(cur_index)}), dưới ngưỡng {floor} "
+            "đang áp dụng. Các phương án thay thế chỉ gồm cây từ ngưỡng này trở lên.")
     default_gaps = {"rice": GAP_RICE_DAYS, "other": GAP_OTHER_DAYS}
     n = seasons if seasons is not None else seasons_for(cur_code, crops, gaps)
     if seasons is None:
@@ -278,6 +317,9 @@ def generate(cur_code: str, crops: dict[str, dict], suit: dict[str, int | None],
         return tuple(parts[q] for q in sup) + (o["id"],)
     ranked.sort(key=key)
     base["options"] = [options[0]] + ranked
+    if _hint and len(base["options"]) < 3 and floor > 0:
+        base["floor_hint"] = _floor_hint(cur_code, crops, suit, floor, dict(
+            mode=mode, seasons=seasons, priorities=priorities, gap_rice=gap_rice, gap_other=gap_other))
     base["ranked_by"] = [{"priority": q, "meaning": SUPPORTED_PRIORITIES[q]} for q in sup]
     base["note"] = "Phương án đầu tiên luôn là hiện tại; các phương án còn lại xếp theo ưu tiên đã chọn."
     base["principle"] = (

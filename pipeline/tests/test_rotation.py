@@ -207,3 +207,56 @@ def test_with_two_seasons_diverse_is_dropped_as_a_twin_not_replaced_by_a_full_ch
 def test_single_season_crop_says_alternatives_are_next_year_crops():
     res = ro.generate("CSV", CROPS, {"CSV": 7705, "SOY": 6277, "SPO": 7273, "GRD": 7182})
     assert res["seasons"] == 1 and "năm kế tiếp" in res["principle"]
+
+
+# GAEZ index at the Son La cell (21.15N 104.05E), rain-fed + high inputs, printed from data/silver/gaez_grid.csv:
+# every annual crop is far below the FAO floor of 4000 (very marginal)
+SON_LA = {"MZE": 452, "RCW": 988, "RCD": 981, "CSV": 675, "SPO": 643, "ONI": 635, "COW": 621, "GRD": 620,
+          "TOM": 537, "WPO": 495, "CAB": 465, "SOY": 461}
+
+
+def test_result_always_carries_the_fao_class_table_for_the_interface():
+    tbl = ro.generate("RCW", CROPS, AN_GIANG)["index_classes"]
+    assert [r["min_index"] for r in tbl] == [8000, 6000, 4000, 2000, 1]
+    assert tbl[0]["class"] == "Rất phù hợp" and tbl[2]["class"] == "Trung bình" and tbl[3]["fao_yield_pct"] == "20–40"
+    assert all({"min_index", "max_index", "class", "fao_yield_pct", "meaning"} <= set(r) for r in tbl)
+    assert ro.generate("COF", CROPS, AN_GIANG)["index_classes"] == tbl            # also when there are no options
+
+
+def test_son_la_gives_only_keep_by_default_and_hints_how_far_to_lower_the_floor():
+    res = ro.generate("MZE", CROPS, SON_LA)
+    assert ids(res) == ["keep"]
+    hint = res["floor_hint"]
+    assert hint["min_index"] is not None and hint["min_index"] < 4000 and hint["below_fao_floor"] is True
+    assert hint["options_if_lowered"] >= 3 and "Hạ ngưỡng xuống" in hint["message"]
+    assert all(c.startswith("Rất biên") for c in hint["classes"])                  # every Son La crop is "very marginal"
+    lowered = ro.generate("MZE", CROPS, SON_LA, min_index=hint["min_index"])      # the hint really delivers >= 3 options
+    assert len(lowered["options"]) >= 3 and lowered["floor_hint"] is None
+
+
+def test_lowering_the_floor_warns_and_marks_every_crop_under_the_fao_floor():
+    res = ro.generate("MZE", CROPS, SON_LA, min_index=500)
+    assert any("thấp hơn 4000" in w for w in res["warnings"])
+    for o in res["options"]:
+        assert any("dưới ngưỡng 4000 của FAO" in r for r in o["risks"]), o["id"]
+        assert all(e["gaez_class"].startswith("Rất biên") for e in o["evidence"])
+    assert res["assumptions"]["min_index"]["custom"] is True and res["assumptions"]["min_index"]["value"] == 500
+
+
+def test_no_hint_when_there_are_enough_options_and_no_floor_warning_at_default():
+    res = ro.generate("RCW", CROPS, AN_GIANG)
+    assert res["floor_hint"] is None and len(res["options"]) >= 3
+    assert not any("thấp hơn 4000" in w for w in res["warnings"])
+
+
+def test_hint_says_so_when_even_the_lowest_floor_cannot_give_three_options():
+    res = ro.generate("RCW", CROPS, {"RCW": 8460})                             # nothing else to rotate with
+    assert res["floor_hint"]["min_index"] is None and "không đủ 3 phương án" in res["floor_hint"]["message"]
+
+
+def test_hint_search_does_not_recurse_forever_and_uses_the_same_settings():
+    res = ro.generate("MZE", CROPS, SON_LA, gap_other=20, priorities=["nitrogen"])
+    assert res["floor_hint"] is not None
+    lowered = ro.generate("MZE", CROPS, SON_LA, gap_other=20, priorities=["nitrogen"],
+                          min_index=res["floor_hint"]["min_index"])
+    assert len(lowered["options"]) == res["floor_hint"]["options_if_lowered"]
