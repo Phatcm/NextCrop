@@ -1,21 +1,23 @@
-"""Field Shift API: read-only endpoints over the Postgres data the pipeline loads.
+"""NextCrop API: read-only endpoints over the Postgres data the pipeline loads.
 
 Run (from app/api):  uvicorn fieldshift_api.main:app --reload --port 8000
 """
 from __future__ import annotations
 
+import mimetypes
 from typing import Annotated
 
 import pg8000.exceptions
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from . import config
 from .repo import PgRepo, Repo
 from .service import ApiError, Service
 
-app = FastAPI(title="Field Shift API", version="1.0",
+app = FastAPI(title="NextCrop API", version="1.0",
               description="Hỗ trợ ra quyết định luân canh. Chỉ tư vấn; dữ liệu theo ô GAEZ ~9 km, không phải từng thửa.")
 app.add_middleware(CORSMiddleware, allow_origins=config.cors_origins(), allow_methods=["GET"], allow_headers=["*"])
 
@@ -85,3 +87,13 @@ def cells(svc: Annotated[Service, Depends(get_service)], west: float, south: flo
           crop: str, mode: str = "hrlm", limit: Annotated[int, Query(ge=1, le=20000)] = 6000):
     """Các ô lưới trong khung bản đồ, chỉ số của một cây (lớp tô màu)."""
     return svc.cells(west, south, east, north, crop, mode, limit)
+
+
+# The UI (app/web) is plain static files served by this same app, so one container does it all and no CORS is needed.
+# Mounted last: every /api route above wins. Module scripts need a JavaScript MIME type, and on some Windows machines
+# the registry maps .js to text/plain, so register the types explicitly.
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("application/geo+json", ".geojson")
+_web = config.web_dir()
+if _web is not None:
+    app.mount("/", StaticFiles(directory=_web, html=True), name="web")

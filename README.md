@@ -1,6 +1,6 @@
 # Field Shift: Adapting Farms with NASA Data
 
-NASA Space Apps Challenge 2026, đề **Field Shift: Adapting Farms with NASA Data**. Công cụ hỗ trợ ra quyết định luân canh dựa trên dữ liệu NASA và đối tác.
+NASA Space Apps Challenge 2026, đề **Field Shift: Adapting Farms with NASA Data**. Sản phẩm của đội tên **NextCrop**: công cụ hỗ trợ ra quyết định luân canh dựa trên dữ liệu NASA và đối tác.
 
 > **Quy định:** phần lõi sản phẩm phải được phát triển trong thời gian thi (14–15/11/2026); mọi công cụ AI dùng trong dự án phải khai báo khi nộp bài. Lịch sử commit của repo này thể hiện công việc làm trong thời gian thi.
 

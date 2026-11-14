@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NextCrop</title>
+<meta name="description" content="Gợi ý luân canh dựa trên dữ liệu FAO GAEZ. Chỉ tư vấn, không thay thế khuyến nghị của cán bộ khuyến nông.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <span class="logo"><svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+        <path d="M22.43 8.34A10 10 0 1 1 9.57 8.34" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <polygon points="12.63,5.77 11.5,10.64 7.64,6.04" fill="currentColor"/>
+        <g transform="translate(16 16) scale(.7) translate(-16 -16)" fill="currentColor">
+          <path d="M16 17c-4.5 0-6-3-6-6 3.5 0 6 1.5 6 6z"/><path d="M16 15c0-4.5 2.5-7 7-7 0 4-2.5 7-7 7z"/>
+          <path d="M16 23V15" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+        </g>
+      </svg>NextCrop</span>
+    <div class="pillsel"><label for="prov" class="sr">Tỉnh</label><select id="prov"></select></div>
+    <button type="button" class="pillbtn" id="newplan">Phương án mới +</button>
+    <button type="button" class="dsw" id="detail" aria-pressed="false" title="Bật để xem thêm số liệu và thẻ tóm tắt khu vực">
+      <svg class="ico ico-off" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="8" y="8" width="8" height="8" rx="2.2" fill="currentColor" stroke="none"/>
+        <path d="M12 2v4M10 4l2 2 2-2"/><path d="M12 22v-4M10 20l2-2 2 2"/><path d="M2 12h4M4 10l2 2-2 2"/><path d="M22 12h-4M20 10l-2 2 2 2"/>
+      </svg>
+      <svg class="ico ico-on" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="2.5" y="2.5" width="19" height="19" rx="5"/>
+        <path d="M12 12V6.5M10 8.5l2-2 2 2"/><path d="M12 12v5.5M10 15.5l2 2 2-2"/><path d="M12 12H6.5M8.5 10l-2 2 2 2"/><path d="M12 12h5.5M15.5 10l2 2-2 2"/>
+      </svg>
+      <span>Xem chi tiết</span>
+    </button>
+  </header>
+  <nav class="sub">
+    <div class="tabs" role="tablist" id="tabs">
+      <button role="tab" id="tab-res" data-tab="res" aria-selected="true">Gợi ý</button>
+      <button role="tab" id="tab-in" data-tab="in" aria-selected="false">Tuỳ chỉnh</button>
+      <button role="tab" id="tab-as" data-tab="as" aria-selected="false">Giả định</button>
+    </div>
+    <span class="place" id="place"></span>
+  </nav>
+
+  <main class="stage">
+    <div id="map" role="img" aria-label="Bản đồ vệ tinh với các ô dữ liệu tô màu theo mức phù hợp của cây đang trồng"></div>
+
+    <section class="panel" aria-label="Bảng điều khiển">
+      <div class="pbody">
+        <!-- Gợi ý -->
+        <div id="v-res" role="tabpanel" aria-labelledby="tab-res">
+          <div class="me">
+            <button type="button" class="mc" id="mc-loc"></button>
+            <button type="button" class="mc" id="mc-crop"></button>
+            <button type="button" class="mc" id="mc-n"></button>
+            <button type="button" class="link" id="edit">Sửa</button>
+          </div>
+          <h2><span id="res-title">Phương án</span><span id="res-info"></span></h2>
+          <div id="res-body" aria-live="polite"></div>
+        </div>
+
+        <!-- Tuỳ chỉnh -->
+        <div id="v-in" role="tabpanel" aria-labelledby="tab-in" hidden>
+          <h2>Tuỳ chỉnh</h2>
+          <span class="lab">Bạn ưu tiên điều gì <button type="button" class="info" data-pop="prio" aria-label="Thông tin thêm" aria-haspopup="dialog">i</button></span>
+          <div class="checks">
+            <label><input type="checkbox" id="p-nitrogen" checked> Cải tạo đất (đạm)</label>
+            <label><input type="checkbox" id="p-pest_cycle"> Giảm sâu bệnh</label>
+            <label><input type="checkbox" id="p-yield"> Mức phù hợp cao</label></div>
+
+          <span class="lab" id="lcrop">Cây đang trồng</span>
+          <div class="list" id="crops" role="radiogroup" aria-labelledby="lcrop"></div>
+
+          <span class="lab" id="lseas">Số vụ trong năm</span>
+          <div class="seg" id="seas" role="group" aria-labelledby="lseas">
+            <button type="button" data-n="" aria-pressed="true">Tự động</button>
+            <button type="button" data-n="1" aria-pressed="false">1</button>
+            <button type="button" data-n="2" aria-pressed="false">2</button>
+            <button type="button" data-n="3" aria-pressed="false">3</button></div>
+
+
+          <details>
+            <summary>Điều chỉnh nâng cao</summary>
+            <label class="lab" for="minidx">Mức phù hợp tối thiểu: <span id="minword"></span><span class="dtl"> (<span id="minval"></span>)</span></label>
+            <input type="range" id="minidx" min="0" max="10000" step="100" value="4000">
+            <span class="hint" id="minclass"></span>
+            <div class="row2">
+              <div><label class="lab" for="gr">Nghỉ giữa hai vụ lúa (ngày)</label><input type="number" id="gr" min="0" max="60" value="7"></div>
+              <div><label class="lab" for="go">Nghỉ giữa các vụ khác (ngày)</label><input type="number" id="go" min="0" max="60" value="15"></div>
+            </div>
+          </details>
+        </div>
+
+        <!-- Giả định -->
+        <div id="v-as" role="tabpanel" aria-labelledby="tab-as" hidden>
+          <h2>Giả định đang dùng</h2>
+          <div id="assump"></div>
+        </div>
+      </div>
+      <div class="pnote">Chỉ tư vấn, không thay thế khuyến nghị của cán bộ khuyến nông. <button type="button" class="info" data-pop="disc" aria-label="Thông tin thêm" aria-haspopup="dialog">i</button></div>
+    </section>
+
+    <button type="button" class="tgl tgl-left" id="tgl-left" aria-label="Ẩn bảng điều khiển" aria-expanded="true" title="Ẩn hoặc hiện bảng điều khiển"><span aria-hidden="true">‹</span></button>
+    <button type="button" class="tgl tgl-right" id="tgl-right" aria-label="Ẩn bảng tóm tắt" aria-expanded="true" title="Ẩn hoặc hiện bảng tóm tắt"><span aria-hidden="true">›</span></button>
+    <div class="card" id="card"></div>
+    <div class="ctrls"><button type="button" id="zin" aria-label="Phóng to">+</button><button type="button" id="zout" aria-label="Thu nhỏ">−</button></div>
+    <div class="legend" id="legend"></div>
+  </main>
+</div>
+
+<div class="onb" id="onb" hidden>
+  <div class="obox" role="dialog" aria-modal="true" aria-labelledby="onb-t">
+    <h2 id="onb-t">Bắt đầu gợi ý luân canh</h2>
+    <p class="hint" style="margin:8px 0 0">Chỉ cần hai thông tin. Các lựa chọn khác đã có mặc định, bạn chỉnh sau trong tab Tuỳ chỉnh.</p>
+    <label class="lab" for="o-prov">Ruộng của bạn ở tỉnh nào?</label>
+    <select class="plain" id="o-prov"></select>
+    <p style="margin:8px 0 0"><button type="button" class="link" id="o-geo">Dùng vị trí của tôi</button>
+      <span class="hint" id="o-geomsg"> hoặc đóng hộp này rồi bấm vào bản đồ.</span></p>
+    <label class="lab" for="o-crop">Bạn đang trồng cây gì?</label>
+    <select class="plain" id="o-crop"></select>
+    <div class="obtns"><button type="button" class="orange" id="o-ok">Xem gợi ý</button>
+      <button type="button" class="ghost" id="o-example">Xem ví dụ trước</button></div>
+    <p class="hint">Chỉ tư vấn, không thay thế khuyến nghị của cán bộ khuyến nông. Thông tin bạn nhập chỉ lưu trên trình duyệt này.
+      <button type="button" class="link" id="o-reset">Bắt đầu lại từ đầu</button></p>
+  </div>
+</div>
+
+<div class="pop" id="pop" role="dialog" aria-label="Thông tin thêm" hidden><button type="button" class="x" aria-label="Đóng">×</button><div id="pop-body"></div></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
