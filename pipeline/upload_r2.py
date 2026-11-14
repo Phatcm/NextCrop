@@ -18,6 +18,7 @@ from pathlib import Path
 
 import yaml
 
+from src import guards
 from src.extractors.appeears_client import load_dotenv
 from src.lake import r2
 from src.lake.layout import LAYERS
@@ -36,6 +37,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--init", action="store_true", help="apply bucket-level settings first")
     ap.add_argument("--verify", action="store_true", help="only verify the bucket against the latest manifest")
     ap.add_argument("--force", action="store_true", help="upload even if the quality gate fails (not advised)")
+    ap.add_argument("--allow-empty", nargs="*", default=[], metavar="TABLE",
+                    help="silver datasets that may have no rows although the previous run had some")
     args = ap.parse_args(argv)
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
@@ -71,6 +74,15 @@ def main(argv: list[str] | None = None) -> int:
             print("  [FAIL]", e)
         if not args.force:
             print("Upload blocked. Fix the data (or pass --force).")
+            return 1
+
+    # regression guard: a silver dataset that had rows in the last published run must not silently become empty
+    previous = guards.rows_from_catalog(r2.read_catalog(client, bucket))
+    dropped = guards.dropped_to_zero({n: d["rows"] for n, d in datasets.items()}, previous, args.allow_empty)
+    if dropped:
+        print("  [FAIL]", guards.message(dropped, previous, "silver"))
+        if not args.force:
+            print("Upload blocked. Fix the data (or pass --allow-empty / --force).")
             return 1
 
     run_id = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")

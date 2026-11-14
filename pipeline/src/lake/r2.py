@@ -220,6 +220,14 @@ def _put_json(client, bucket: str, key: str, obj, cache: str | None = None) -> N
                       ContentType="application/json", **kw)
 
 
+def read_catalog(client, bucket: str) -> dict | None:
+    """Catalog of the latest published run, or None when the bucket has none yet."""
+    try:
+        return json.loads(client.get_object(Bucket=bucket, Key="_meta/catalog.json")["Body"].read())
+    except client.exceptions.NoSuchKey:
+        return None
+
+
 def publish_meta(client, bucket: str, manifest: dict, datasets: dict, schema_version: str,
                  *, make_latest: bool) -> None:
     run_id = manifest["run_id"]
