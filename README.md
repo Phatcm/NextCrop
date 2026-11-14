@@ -23,7 +23,7 @@ docs/       ghi chú dữ liệu (GAEZ) và hợp đồng dữ liệu giữa pip
 | NASA POWER | khí hậu (nhiệt độ, mưa, độ ẩm đất, nắng) |
 | NASA MODIS NDVI (AppEEARS) | độ xanh thực vật + chất lượng pixel |
 | NASA GFSAD30SEACE | mặt nạ đất canh tác |
-| FAO GAEZ v5 (`RES05-SXX30AS`) | mức thích hợp của cây trồng (0–10000) |
+| FAO GAEZ v5 (`RES05-SUX`, đất canh tác) | mức thích hợp của cây trồng (0–10000) |
 
 Chi tiết GAEZ, mã cây, cách đối chiếu: [docs/gaez-notes.md](docs/gaez-notes.md). Hợp đồng dữ liệu nháp: [docs/data-contract.md](docs/data-contract.md).
 
