@@ -54,15 +54,8 @@ def test_migrate_copy_and_constraints(tmp_path):
     conn = pg.connect(os.environ["TEST_DATABASE_URL"])
     try:
         conn.run(f"DROP SCHEMA IF EXISTS {pg.SCHEMA} CASCADE")
-        assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == ["001_init", "002_gaez_grid_rain_qa",
-                                                                         "003_crop_traits",
-                                                                         "004_rain_validation",
-                                                                         "005_crop_water_regime",
-                                                                         "006_gaez_grid_cropland",
-                                                                         "007_crop_profile",
-                                                                         "008_gaez_suitability_cropland",
-                                                                         "009_environment_inputs",
-                                                                         "010_crop_ranking_view"]
+        # every migration file, in order (the exact list is not repeated here: test_repo_consistency checks the numbering)
+        assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == sorted(p.stem for p in MIGRATIONS.glob("*.sql"))
         assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == []        # idempotent
         conn.run(f"SET search_path TO {pg.SCHEMA}")
 
@@ -170,6 +163,22 @@ def test_migrate_copy_and_constraints(tmp_path):
         assert conn.run("SELECT crop_code, rank, rank_annual, life_cycle FROM v_crop_ranking "
                         "WHERE region_id = 'r1' AND input_mode = 'HILM' ORDER BY rank") == [
             ["COF", 1, None, "perennial"], ["SOY", 2, 1, "annual"]]               # perennial first overall, not ranked
+        # Viet Nam mask and per-cell environment inputs (migrations 011, 012)
+        pg.copy_csv(conn, "grid_vietnam", csv("gv.csv", "lat,lon,vn_share,in_vietnam\n10.5,105.3,1.0,True\n17.9,102.6,0.0,False\n"))
+        assert conn.run("SELECT lat FROM grid_vietnam WHERE in_vietnam") == [[10.5]]
+        with pytest.raises(Exception):   # share outside 0..1 -> CHECK
+            pg.copy_csv(conn, "grid_vietnam", csv("gv2.csv", "lat,lon,vn_share,in_vietnam\n1.0,1.0,1.5,True\n"))
+        pg.copy_csv(conn, "grid_environment", csv("ge.csv",
+            "lat,lon,slope_mean_pct,share_gt12_pct,share_gt24_pct,slope_class,n_px_slope,soil_limiting_him\n"
+            "10.5,105.3,3.4,2.0,0.5,low,100,0.9\n10.6,105.3,,,,,,\n"))
+        assert conn.run("SELECT soil_limiting_him IS NULL FROM grid_environment ORDER BY lat") == [[False], [True]]   # empty = NULL, not 0
+        with pytest.raises(Exception):   # unknown slope class -> CHECK
+            pg.copy_csv(conn, "grid_environment", csv("ge2.csv", "lat,lon,slope_class\n10.7,105.3,steep\n"))
+        pg.copy_csv(conn, "grid_water_demand", csv("gw.csv", "lat,lon,crop_code,input_mode,wdc_mm\n10.5,105.3,RCW,HILM,0.0\n"))
+        with pytest.raises(Exception):   # rain-fed modes are not stored, a negative deficit is nodata -> CHECK
+            pg.copy_csv(conn, "grid_water_demand", csv("gw2.csv", "lat,lon,crop_code,input_mode,wdc_mm\n10.5,105.3,RCW,LILM,-9\n"))
+        with pytest.raises(Exception):   # unknown crop -> foreign key
+            pg.copy_csv(conn, "grid_water_demand", csv("gw3.csv", "lat,lon,crop_code,input_mode,wdc_mm\n10.5,105.3,NOPE,HILM,5\n"))
         with pytest.raises(Exception):   # unknown region -> foreign key
             pg.copy_csv(conn, "power_monthly", csv("m.csv", "region_id,month\nnope,2015-01\n"))
         with pytest.raises(Exception):   # out-of-range value -> CHECK
