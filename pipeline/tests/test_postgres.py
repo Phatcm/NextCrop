@@ -31,7 +31,7 @@ def test_real_migration_splits_cleanly():
 
 
 def test_load_order_matches_migration_tables():
-    created = {s.split()[2] for s in pg.split_sql((MIGRATIONS / "001_init.sql").read_text(encoding="utf-8"))
+    created = {s.split()[2] for p in sorted(MIGRATIONS.glob("*.sql")) for s in pg.split_sql(p.read_text(encoding="utf-8"))
                if s.startswith("CREATE TABLE")}
     assert set(pg.LOAD_ORDER) == created - {"schema_migrations", "pipeline_run"}
 
@@ -54,7 +54,7 @@ def test_migrate_copy_and_constraints(tmp_path):
     conn = pg.connect(os.environ["TEST_DATABASE_URL"])
     try:
         conn.run(f"DROP SCHEMA IF EXISTS {pg.SCHEMA} CASCADE")
-        assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == ["001_init"]
+        assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == ["001_init", "002_gaez_grid_rain_qa"]
         assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == []        # idempotent
         conn.run(f"SET search_path TO {pg.SCHEMA}")
 
@@ -78,6 +78,21 @@ def test_migrate_copy_and_constraints(tmp_path):
         top = conn.run("SELECT crop_code, rank FROM v_crop_ranking WHERE region_id='r1' ORDER BY rank")
         assert top == [["RCW", 1], ["MZE", 2]]
         assert conn.run("SELECT gwettop IS NULL, name_verified FROM power_daily, dim_crop WHERE crop_code='MZE'") == [[True, False]]
+        # rain QA (migration 002): a removed day has NULL rain + a reason; a reason with a value is rejected
+        pg.copy_csv(conn, "power_daily", csv("p2.csv",
+            "region_id,date,T2M,PRECTOTCORR,PRECTOTCORR_QA\n"
+            'r1,2015-01-02,15.0,,"removed: 691.0 mm/day, ERA5 only 22.2 mm/day (cross-check)"\n'))
+        assert conn.run("SELECT prectotcorr IS NULL, prectotcorr_qa LIKE 'removed:%' FROM power_daily "
+                        "WHERE date = '2015-01-02'") == [[True, True]]
+        with pytest.raises(Exception):
+            pg.copy_csv(conn, "power_daily", csv("p3.csv",
+                "region_id,date,T2M,PRECTOTCORR,PRECTOTCORR_QA\nr1,2015-01-03,15.0,691.0,removed\n"))
+        # nationwide GAEZ grid (migration 002)
+        pg.copy_csv(conn, "gaez_grid", csv("gg.csv",
+            "lat,lon,crop_code,hilm,hrlm,lilm,lrlm\n10.45,105.35,RCW,8000,7600,5000,\n"))
+        assert conn.run("SELECT hrlm, lrlm FROM gaez_grid WHERE crop_code = 'RCW'") == [[7600, None]]
+        with pytest.raises(Exception):   # out-of-range value -> CHECK
+            pg.copy_csv(conn, "gaez_grid", csv("gg2.csv", "lat,lon,crop_code,hilm\n10.55,105.35,RCW,10001\n"))
         with pytest.raises(Exception):   # unknown region -> foreign key
             pg.copy_csv(conn, "power_monthly", csv("m.csv", "region_id,month\nnope,2015-01\n"))
         with pytest.raises(Exception):   # out-of-range value -> CHECK

@@ -53,10 +53,37 @@ def _table_parts(stmt: str) -> tuple[str, list[str]] | None:
     return m.group(1), _split_top_level(stmt[m.end():stmt.rindex(")")])
 
 
+_ALTER_RE = re.compile(r"ALTER TABLE (\w+)\s+ADD\s+(COLUMN\s+)?(.+)$", re.I | re.S)
+
+
+def fold_alters(statements: list[str]) -> list[str]:
+    """Merge `ALTER TABLE t ADD COLUMN ...` / `ADD CONSTRAINT ...` into the CREATE TABLE of t, so later
+    migrations are reflected in the SQLite proxy (the proxy only understands CREATE TABLE).
+    New columns go before the table constraints (SQLite requires that order)."""
+    out = list(statements)
+    for s in statements:
+        m = _ALTER_RE.match(s)
+        if not m:
+            continue
+        table, is_col, spec = m.group(1), bool(m.group(2)), m.group(3).strip()
+        for i, c in enumerate(out):
+            tp = _table_parts(c) if re.match(rf"CREATE TABLE {table}\s*\(", c, re.I) else None
+            if tp:
+                parts = tp[1]
+                at = next((k for k, p in enumerate(parts) if p.upper().startswith(_NON_COLUMN)), len(parts)) if is_col else len(parts)
+                parts.insert(at, spec)
+                out[i] = f"CREATE TABLE {table} (" + ", ".join(parts) + ")"
+                break
+        else:
+            raise ValueError(f"ALTER TABLE {table}: no CREATE TABLE found in the migrations")
+        out.remove(s)
+    return out
+
+
 def ddl_types(statements: list[str]) -> dict[str, dict[str, str]]:
     """{table: {column: postgres type}} read from the CREATE TABLE statements."""
     out: dict[str, dict[str, str]] = {}
-    for s in statements:
+    for s in fold_alters(statements):
         tp = _table_parts(s)
         if not tp:
             continue
@@ -98,7 +125,7 @@ def _strip_regex_checks(part: str) -> str:
 def translate(statements: list[str], tables: list[str]) -> tuple[list[str], list[str]]:
     """(tables+indexes, views) in SQLite dialect, restricted to `tables`."""
     ddl, views = [], []
-    for s in statements:
+    for s in fold_alters(statements):
         tp = _table_parts(s)
         if tp:
             table, parts = tp
@@ -155,7 +182,7 @@ def strict_value(raw: str, pgtype: str):
 def dry_run(silver_root: Path, migration_sql: str, log=print) -> dict:
     """Load every silver table into an in-memory SQLite built from the migration.
     Returns {"counts": {table: rows}, "errors": [...], "warnings": [...]}."""
-    statements = split_sql(migration_sql)
+    statements = fold_alters(split_sql(migration_sql))
     types = ddl_types(statements)
     ddl, views = translate(statements, LOAD_ORDER)
     con = sqlite3.connect(":memory:")

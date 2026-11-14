@@ -35,4 +35,4 @@ Không commit khóa, `.env` hay dữ liệu thô lớn (đã chặn trong `.giti
 - NASA POWER, MODIS, GFSAD30: dữ liệu mở của NASA.
 
 ## Công cụ AI đã dùng
-_(ghi rõ công cụ và mục đích khi nộp bài)_
+- **Claude Code** (Anthropic): viết và kiểm thử mã pipeline dữ liệu (`pipeline/`), kiểm tra chất lượng dữ liệu (đối chiếu chéo nguồn, QA mưa), soạn tài liệu (`docs/`). Con người quyết định lựa chọn đề, nguồn dữ liệu, ngưỡng và duyệt kết quả.

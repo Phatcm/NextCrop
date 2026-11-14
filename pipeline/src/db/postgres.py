@@ -10,7 +10,7 @@ SCHEMA = "field_shift"
 # Parents before children (foreign keys). dim_* first; vn_grid_monthly has no parent.
 LOAD_ORDER = ["dim_region", "dim_crop", "power_daily", "power_monthly", "ndvi_series", "ndvi_raw", "smap_daily",
               "gfsad_points", "landcover_by_year", "landcover_classes", "terrain", "gaez_suitability",
-              "vn_grid_monthly"]
+              "gaez_grid", "vn_grid_monthly"]
 
 
 def parse_dsn(dsn: str) -> dict:
