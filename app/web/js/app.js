@@ -14,6 +14,8 @@ const EXAMPLE = { shape: "An Giang", lat: 10.45, lon: 105.35, crop: "RCW", n: nu
 const st = {
   ...EXAMPLE, move: null, hide: new Set(), tab: "res", confirmed: false, outside: false,
   crops: [], features: null, result: null, error: null, loading: false, cells: [],
+  layerState: "idle",                                          // idle | loading | ready | empty | error (the cell layer)
+  navSeq: 0,                                                   // a newer navigation cancels an older, slower one
 };
 let map, mapReady = false, pin;
 let optSeq = 0, layerSeq = 0, optCtl = null, layerCtl = null;
@@ -137,15 +139,18 @@ async function loadLayer() {
   layerCtl?.abort();
   layerCtl = new AbortController();
   const b = st.features && st.shape && !st.outside ? provinceBounds(st.features, st.shape) : null;
-  if (!b) { st.cells = []; drawCells(); renderCard(); return; }
+  if (!b) { st.cells = []; st.layerState = "idle"; drawCells(); renderCard(); return; }
   const [[west, south], [east, north]] = expandBounds(b, BUFFER_CELLS * STEP + 0.02);
+  st.layerState = "loading";
+  renderCard();
   try {
     const r = await api.cells({ west, south, east, north, crop: st.crop, mode: MODE, limit: 6000 }, layerCtl.signal);
     if (seq !== layerSeq) return;
     st.cells = selectCells(r.cells, st.features, st.shape, BUFFER_CELLS);
+    st.layerState = st.cells.length ? "ready" : "empty";
   } catch (e) {
     if (e.name === "AbortError" || seq !== layerSeq) return;
-    st.cells = [];                                              // the map layer is optional: results still work
+    st.cells = []; st.layerState = "error";                     // the map layer is optional: results still work
   }
   drawCells();
   renderCard();
@@ -156,9 +161,10 @@ function pickPoint(lat, lon, move, { confirm = true } = {}) {
   if (!st.features) { st.error = { code: "no_boundaries", message: "Chưa tải được ranh giới tỉnh nên chưa chọn được điểm." }; renderResults(); return; }
   const name = findProvince(lon, lat, st.features);
   const changed = name !== st.shape;
+  st.navSeq++;                                                  // cancels a province change still waiting for its cells
   Object.assign(st, { lat, lon, shape: name, outside: !name, move, confirmed: st.confirmed || confirm });
   $("prov").value = name ?? "";
-  if (changed) { st.cells = []; loadLayer(); } else drawCells();
+  if (changed) { st.cells = []; st.hide.clear(); loadLayer(); } else drawCells();
   moveMap();
   loadOptions();
   save();
@@ -167,9 +173,12 @@ function pickPoint(lat, lon, move, { confirm = true } = {}) {
 
 /** A province chosen from the list: the point becomes the data cell inside it that is nearest to its centroid. */
 async function goToProvince(name) {
+  const mine = ++st.navSeq;
   Object.assign(st, { shape: name, outside: false, cells: [], move: "fly", confirmed: true });
+  st.hide.clear();
   $("prov").value = name;
   await loadLayer();
+  if (mine !== st.navSeq) return;                               // the user chose something else meanwhile
   const c0 = provinceCentroid(st.features, name);
   const hit = c0 ? nearestInside(st.cells, c0.lat, c0.lon) : null;
   if (hit) Object.assign(st, { lat: hit.lat, lon: hit.lon });
@@ -183,6 +192,7 @@ async function goToProvince(name) {
 
 function setCrop(code) {
   st.crop = code; st.confirmed = true;
+  st.hide.clear();                                              // another crop has another spread of classes
   loadLayer();
   loadOptions();
   save();
@@ -279,8 +289,13 @@ function renderCrops() {
 }
 
 function renderCard() {
-  if (st.outside || !st.cells.length) { $("card").innerHTML = '<h4>Tóm tắt khu vực</h4><div class="hint">Chưa có ô nào để tóm tắt.</div>'; return; }
+  const head = "<h4>Tóm tắt khu vực</h4>";
+  if (st.outside) { $("card").innerHTML = `${head}<div class="hint">Điểm đang chọn nằm ngoài ranh giới tỉnh, nên không có ô nào.</div>`; return; }
+  if (st.layerState === "loading") { $("card").innerHTML = `${head}<div class="hint">Đang tải các ô dữ liệu…</div>`; return; }
+  if (st.layerState === "error") { $("card").innerHTML = `${head}<div class="hint">Không tải được các ô dữ liệu. <button type="button" class="small" data-retry-layer>Thử lại</button></div>`; return; }
+  if (!st.cells.length) { $("card").innerHTML = `${head}<div class="hint">Tỉnh này không có ô dữ liệu cho cây đang chọn.</div>`; return; }
   const counts = countByClass(st.cells);
+  const allHidden = Object.keys(counts).every((k) => st.hide.has(k));
   const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
   const bar = CLASSES.map((c) => `<i style="flex:${counts[c.key] ?? 0};background:var(--${c.key})"></i>`).join("");
   const checks = CLASSES.filter((c) => counts[c.key]).map((c) => `<label><input type="checkbox" data-k="${c.key}" ${st.hide.has(c.key) ? "" : "checked"}>${dot(c.key)}${c.label}: <b>${counts[c.key]}</b></label>`).join("");
@@ -290,6 +305,8 @@ function renderCard() {
   $("card").innerHTML = `<h4>Tóm tắt khu vực</h4>
     <div class="sumblock"><div class="sumtitle">Ô theo mức phù hợp · ${esc(cropName(st.crop))}</div>
       <div class="segbar">${bar}</div><div class="sumchecks">${checks}</div>
+      ${allHidden ? '<div class="note">Đang ẩn tất cả các mức nên bản đồ không còn ô nào.</div>' : ""}
+      ${st.hide.size ? '<button type="button" class="small" data-showall>Hiện tất cả</button>' : ""}
       <div class="hint">Bỏ chọn một mức để ẩn các ô đó. ${total} ô nằm trong tỉnh; ô mờ ngoài biên là vùng đệm ${BUFFER_CELLS} ô.</div></div>
     ${rows ? `<div class="sumblock"><div class="sumtitle">Cây một năm hợp nhất ở ô đã chọn</div>${rows}</div>` : ""}`;
 }
@@ -381,6 +398,10 @@ function bindEvents() {
     const k = e.target.dataset.k; if (!k) return;
     if (e.target.checked) st.hide.delete(k); else st.hide.add(k);
     drawCells(); renderCard();
+  });
+  $("card").addEventListener("click", (e) => {
+    if (e.target.closest("[data-showall]")) { st.hide.clear(); drawCells(); renderCard(); }
+    else if (e.target.closest("[data-retry-layer]")) loadLayer();
   });
   $("res-body").addEventListener("click", (e) => {
     if (e.target.closest("[data-retry]")) { loadOptions(); loadLayer(); return; }
