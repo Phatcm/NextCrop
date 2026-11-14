@@ -96,7 +96,7 @@ def validate(conn, counts: dict, catalog: dict, start: int, end: int, cfg: dict 
     rep.check("power_daily: no NULL t2m, and NULL rain only where the rain QA rule removed the day (never 0)",
               scalar(conn, "SELECT count(*) FROM power_daily WHERE t2m IS NULL "
                            "OR (prectotcorr IS NULL AND prectotcorr_qa IS NULL)") == 0)
-    limit = float(((cfg or {}).get("power", {}).get("rain_qa") or {}).get("max_daily_mm", 150))
+    limit = float(((cfg or {}).get("power", {}).get("rain_qa") or {}).get("max_daily_mm", 180))
     rep.check(f"power_daily: no rain above the QA limit survives ({limit:g} mm/day)",
               scalar(conn, f"SELECT count(*) FROM power_daily WHERE prectotcorr > {limit}") == 0)
     rep.check("power_daily: t2m in [-10, 45] C", scalar(conn, "SELECT count(*) FROM power_daily WHERE t2m NOT BETWEEN -10 AND 45") == 0)

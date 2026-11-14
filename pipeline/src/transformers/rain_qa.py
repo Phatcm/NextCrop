@@ -12,7 +12,7 @@ from __future__ import annotations
 
 PARAM = "PRECTOTCORR"
 FLAG_COL = "PRECTOTCORR_QA"          # silver column prectotcorr_qa: empty = untouched
-DEFAULT_MAX_MM = 150.0
+DEFAULT_MAX_MM = 180.0
 DEFAULT_MIN_VALID_FRAC = 0.8          # a month/year needs >= 80% valid days to be recomputed
 
 

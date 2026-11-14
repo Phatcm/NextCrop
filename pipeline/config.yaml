@@ -56,7 +56,7 @@ power:
   # DATA-05: POWER (MERRA-2) đôi khi có đỉnh mưa phi lý (An Giang 2020-06-14 = 691 mm; ERA5 cho 22 mm).
   # Ngày vượt ngưỡng -> NULL + cờ; tháng/năm chứa ngày đó được tính lại từ các ngày còn lại.
   rain_qa:
-    max_daily_mm: 150
+    max_daily_mm: 180
     min_valid_frac: 0.8
 
 # Lưới khí hậu cả nước (POWER regional: tối đa 10 độ mỗi chiều, 1 tham số mỗi lần gọi).

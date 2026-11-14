@@ -13,7 +13,7 @@ Nguồn thật là [pipeline/db/migrations/001_init.sql](../pipeline/db/migratio
 |---|---|---|
 | `dim_region` | `region_id` | vùng demo: bbox, tỉnh, vùng sinh thái, kết quả kiểm tra đất canh tác (MODIS và GFSAD) |
 | `dim_crop` | `crop_code` | 24 cây GAEZ, tên tiếng Việt, `name_verified` |
-| `power_daily`, `power_monthly` | `region_id` + ngày/tháng | khí hậu NASA POWER 2015–2025. Mưa ngày phi lý (> 150 mm/ngày) là `NULL` kèm lý do trong `power_daily.prectotcorr_qa` |
+| `power_daily`, `power_monthly` | `region_id` + ngày/tháng | khí hậu NASA POWER 2015–2025. Mưa ngày phi lý (> 180 mm/ngày) là `NULL` kèm lý do trong `power_daily.prectotcorr_qa` |
 | `ndvi_series` | `region_id, source_key, date` | NDVI sau QA, `source` = `measured` / `interpolated` / `missing` |
 | `ndvi_raw` | như trên | NDVI trước nội suy, kèm `valid_frac`, `cloud_frac` |
 | `smap_daily` | `region_id, date` | độ ẩm đất SMAP; `sm_recommended` là NULL khi NASA không khuyến nghị |

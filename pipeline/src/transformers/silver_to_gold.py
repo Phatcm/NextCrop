@@ -113,7 +113,7 @@ def build_region_gold(region: Region, start_year: int, end_year: int, *, power: 
         if rain_removed is not None:
             qa = power_cfg.get("rain_qa") or {}
             gold["climate"]["rain_qa"] = {
-                "rule": f"PRECTOTCORR ngày > {qa.get('max_daily_mm', 150.0):g} mm bị đặt NULL; tháng/năm có ngày đó "
+                "rule": f"PRECTOTCORR ngày > {qa.get('max_daily_mm', 180.0):g} mm bị đặt NULL; tháng/năm có ngày đó "
                         "được tính lại từ các ngày còn lại (mm/ngày)",
                 "removed_days": rain_removed}
             if rain_removed:

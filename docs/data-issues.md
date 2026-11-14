@@ -74,18 +74,20 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - **Còn lại của DATA-04:** NDVI, SMAP, lớp phủ đất vẫn chỉ có 6 vùng; khí hậu POWER đã có cả nước.
 
 ### DATA-05 · ĐÃ XỬ LÝ (14/11/2026) · Mưa phi lý lan sang nhiều bảng
-- **Đã làm:** `src/transformers/rain_qa.py`, cấu hình `power.rain_qa` (`max_daily_mm: 150`, `min_valid_frac: 0.8`). Ngày vượt ngưỡng → `prectotcorr = NULL` (không phải 0) kèm lý do ở cột mới `prectotcorr_qa`; tháng và năm chứa ngày đó được tính lại từ các ngày còn lại (mm/ngày), tháng/năm khác giữ nguyên số của POWER. Gold có `climate.rain_qa.removed_days` và một dòng trong `caveats`. Loader Postgres kiểm tra: rỗng mưa chỉ khi có cờ, không còn ngày > 150 mm.
-- **[ĐÃ XÁC NHẬN] trên dữ liệu POWER thật 2015–2025, ngưỡng 150 mm (đã chốt 14/11):** loại đúng 5 ngày, đều bị ERA5 (Open-Meteo, chỉ để kiểm tra, không đưa vào sản phẩm) phủ nhận:
+- **Đã làm:** `src/transformers/rain_qa.py`, cấu hình `power.rain_qa` (`max_daily_mm: 180`, `min_valid_frac: 0.8`). Ngày vượt ngưỡng → `prectotcorr = NULL` (không phải 0) kèm lý do ở cột mới `prectotcorr_qa`; tháng và năm chứa ngày đó được tính lại từ các ngày còn lại (mm/ngày), tháng/năm khác giữ nguyên số của POWER. Gold có `climate.rain_qa.removed_days` và một dòng trong `caveats`. Loader Postgres kiểm tra: rỗng mưa chỉ khi có cờ, không còn ngày > 180 mm.
+- **[ĐÃ XÁC NHẬN] ngưỡng chốt 180 mm/ngày (14/11).** Trên dữ liệu POWER thật 2015–2025 loại 4 ngày, đều bị ERA5 (Open-Meteo, chỉ để kiểm tra, không đưa vào sản phẩm) phủ nhận; giữ lại ngày mưa thật:
 
-  | Vùng | Ngày | POWER | ERA5 |
-  |---|---|---|---|
-  | An Giang | 2020-06-14 | 691 mm | 22 mm |
-  | Sơn La | 2022-02-04 | 211 mm | 0 mm |
-  | Thái Bình | 2020-10-18 | 205 mm | 17 mm |
-  | Đắk Lắk | 2019-08-07 | 200 mm | 29 mm |
-  | Thái Bình | 2024-09-07 | 155 mm | **144 mm (mưa thật, bão Yagi)** |
+  | Vùng | Ngày | POWER | ERA5 | Kết quả |
+  |---|---|---|---|---|
+  | An Giang | 2020-06-14 | 691 mm | 22 mm | loại |
+  | Sơn La | 2022-02-04 | 211 mm | 0 mm | loại |
+  | Thái Bình | 2020-10-18 | 205 mm | 17 mm | loại |
+  | Đắk Lắk | 2019-08-07 | 200 mm | 29 mm | loại |
+  | Thái Bình | 2024-09-07 | 155 mm | 144 mm (bão Yagi, mưa thật) | **giữ** |
+  | An Giang | 2020-06-15 | 141 mm | 10 mm | **còn sót** (dưới ngưỡng) |
 
-  **Ngày 2024-09-07 là mưa thật** (ERA5 144 mm, bão Yagi) nhưng bị loại nhầm vì ngưỡng 150 mm; ngưỡng ~180 mm sẽ giữ ngày này mà vẫn loại 4 ngày còn lại (≥ 200 mm). Tháng 6/2020 An Giang từ 1.114 mm xuống 437 mm (ERA5: 291 mm); tổng năm 2020 từ 3.041 mm xuống khoảng 2.350 mm. Ngưỡng 250 mm ban đầu chỉ bắt được ngày An Giang. Ngưỡng cố định có rủi ro cắt mưa thật (miền Trung tháng 10/2020), nhưng 6 vùng demo không ở miền Trung.
+  Ngưỡng 250 chỉ bắt 1/4, ngưỡng 150 loại nhầm ngày Yagi. Ngày An Giang 2020-06-15 (141 mm, ERA5 10 mm) vẫn còn sót: tháng 6/2020 sau QA là 437 mm, bỏ thêm ngày này còn ~296 mm, gần ERA5 (291 mm). Ngưỡng cố định không tách được hết nhiễu khỏi mưa thật; hướng tự động hơn là đối chiếu nguồn thứ hai (xem dưới). Tổng năm 2020 An Giang từ 3.041 mm xuống khoảng 2.350 mm.
+- **Hướng tự động (chưa làm):** với các ngày ứng viên (> 100 mm), tra ERA5 cùng điểm; loại ngày POWER nếu ERA5 < 50% POWER. Cách này tách đủ 7 ngày trên không cần ngưỡng cố định, cần mạng khi chạy ETL; mất mạng thì quay về ngưỡng 180 mm.
 - **Chưa xử lý:** lưới khí hậu cả nước (`vn_grid_monthly`) là dữ liệu tháng nên không áp được quy tắc theo ngày; ô lưới chứa An Giang vẫn mang số tháng 6/2020 cao bất thường.
 
 ### DATA-06 · Cao · Ninh Thuận 1.961 mm/năm, nhiều khả năng quá cao
