@@ -15,6 +15,7 @@ const st = {
   ...EXAMPLE, move: null, hide: new Set(), tab: "res", confirmed: false, outside: false,
   crops: [], features: null, result: null, error: null, loading: false, cells: [],
   layerState: "idle",                                          // idle | loading | ready | empty | error (the cell layer)
+  flash: "",                                                   // short message in the summary card
   navSeq: 0,                                                   // a newer navigation cancels an older, slower one
 };
 let map, mapReady = false, pin;
@@ -84,7 +85,20 @@ function initMap() {
     moveMap();
   });
 }
+/** Hidden class levels are easy to forget (the card with the ticks only shows in detail mode), so say it on the map. */
+function renderMapHint() {
+  const n = st.hide.size, el = $("maphint");
+  el.hidden = n === 0;
+  if (n) el.innerHTML = `Đang ẩn ${n} mức màu trên bản đồ <button type="button" data-showall>Hiện tất cả</button>`;
+}
+let flashTimer;
+function flash(msg) {
+  st.flash = msg; renderCard();
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { st.flash = ""; renderCard(); }, 3500);
+}
 function drawCells() {
+  renderMapHint();
   if (!mapReady) return;
   const centre = cellOf(st.lat, st.lon);
   const isCentre = (c) => c.i === centre.i && c.j === centre.j;
@@ -295,7 +309,6 @@ function renderCard() {
   if (st.layerState === "error") { $("card").innerHTML = `${head}<div class="hint">Không tải được các ô dữ liệu. <button type="button" class="small" data-retry-layer>Thử lại</button></div>`; return; }
   if (!st.cells.length) { $("card").innerHTML = `${head}<div class="hint">Tỉnh này không có ô dữ liệu cho cây đang chọn.</div>`; return; }
   const counts = countByClass(st.cells);
-  const allHidden = Object.keys(counts).every((k) => st.hide.has(k));
   const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
   const bar = CLASSES.map((c) => `<i style="flex:${counts[c.key] ?? 0};background:var(--${c.key})"></i>`).join("");
   const checks = CLASSES.filter((c) => counts[c.key]).map((c) => `<label><input type="checkbox" data-k="${c.key}" ${st.hide.has(c.key) ? "" : "checked"}>${dot(c.key)}${c.label}: <b>${counts[c.key]}</b></label>`).join("");
@@ -305,7 +318,7 @@ function renderCard() {
   $("card").innerHTML = `<h4>Tóm tắt khu vực</h4>
     <div class="sumblock"><div class="sumtitle">Ô theo mức phù hợp · ${esc(cropName(st.crop))}</div>
       <div class="segbar">${bar}</div><div class="sumchecks">${checks}</div>
-      ${allHidden ? '<div class="note">Đang ẩn tất cả các mức nên bản đồ không còn ô nào.</div>' : ""}
+      ${st.flash ? `<div class="note">${esc(st.flash)}</div>` : ""}
       ${st.hide.size ? '<button type="button" class="small" data-showall>Hiện tất cả</button>' : ""}
       <div class="hint">Bỏ chọn một mức để ẩn các ô đó. ${total} ô nằm trong tỉnh; ô mờ ngoài biên là vùng đệm ${BUFFER_CELLS} ô.</div></div>
     ${rows ? `<div class="sumblock"><div class="sumtitle">Cây một năm hợp nhất ở ô đã chọn</div>${rows}</div>` : ""}`;
@@ -396,8 +409,20 @@ function bindEvents() {
   $("mc-n").onclick = () => setTab("in");
   $("card").addEventListener("change", (e) => {
     const k = e.target.dataset.k; if (!k) return;
-    if (e.target.checked) st.hide.delete(k); else st.hide.add(k);
+    if (e.target.checked) st.hide.delete(k);
+    else {
+      const levels = Object.keys(countByClass(st.cells));
+      if (levels.every((x) => x === k || st.hide.has(x))) {       // the last visible level cannot be hidden
+        e.target.checked = true;
+        flash("Cần giữ ít nhất một mức để bản đồ còn ô.");
+        return;
+      }
+      st.hide.add(k);
+    }
     drawCells(); renderCard();
+  });
+  $("maphint").addEventListener("click", (e) => {
+    if (e.target.closest("[data-showall]")) { st.hide.clear(); drawCells(); renderCard(); }
   });
   $("card").addEventListener("click", (e) => {
     if (e.target.closest("[data-showall]")) { st.hide.clear(); drawCells(); renderCard(); }
