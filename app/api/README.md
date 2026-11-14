@@ -47,7 +47,7 @@ Mọi lỗi có dạng `{"detail": {"code": ..., "message": ...}}`:
 | `db_unavailable` | 503 | không đọc được database (đang khởi động lại, mất mạng) |
 
 ## Thiết kế và giới hạn
-- **Chỉ đọc có kiểm soát:** mọi yêu cầu chạy trong `BEGIN READ ONLY ... ROLLBACK`, nên không ghi được kể cả với role chủ (đã thử trên Neon bằng một câu `DELETE` không động tới dòng nào; test Postgres thật có trong `tests/test_repo_pg.py` nhưng chưa chạy ở CI, xem OPS-13). Vẫn nên dùng role chỉ đọc (`docs/postgres-hosting.md` mục 2, OPS-11).
+- **Chỉ đọc có kiểm soát:** mọi yêu cầu chạy trong `BEGIN READ ONLY ... ROLLBACK`, nên không ghi được kể cả với role chủ (đã thử trên Neon bằng một câu `DELETE` không động tới dòng nào; test Postgres thật nằm trong `tests/test_repo_pg.py` và chạy ở CI, workflow `api-tests`). Vẫn nên dùng role chỉ đọc (`docs/postgres-hosting.md` mục 2, OPS-11).
 - **Ô lưới, không phải ô gần nhất:** điểm được đổi thành ô chứa nó theo đúng quy ước của pipeline (`lat = 24 - (i + 0,5)/12`, `lon = 102 + (j + 0,5)/12`), rồi tra bằng khoảng 0,0002° quanh tâm ô.
 - **Bộ nhớ đệm 5 phút** cho bảng cây và cho từng ô (tối đa 512 ô): kéo thanh trượt trong cùng một ô chỉ mất vài mili giây. Dữ liệu đổi khi pipeline nạp lại, tối đa 5 phút sau API mới thấy.
 - **Một kết nối, có khóa:** đủ cho demo; chưa dùng pool. Khi tải lớn hơn cần pool hoặc nhiều worker, mỗi worker một kết nối.

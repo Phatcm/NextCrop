@@ -223,10 +223,10 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - `R2_PUBLIC_BASE_URL` đang trống: bucket chưa công khai. App dùng Postgres (qua API `app/api`) nên chưa cần, nhưng nếu muốn xuất JSON tĩnh (gold) thì phải quyết định mở đọc công khai.
 
 ### OPS-11 · Trung bình · Role chỉ đọc cho API
-- API chạy mọi truy vấn trong `BEGIN READ ONLY ... ROLLBACK` nên **không ghi được dữ liệu kể cả khi dùng `neondb_owner`** (có test với Postgres thật, chạy khi đặt `TEST_DATABASE_URL`; xem OPS-13 về CI). Dù vậy vẫn nên tạo role chỉ đọc theo `docs/postgres-hosting.md` mục 2 và đặt chuỗi kết nối của nó vào `APP_DATABASE_URL`. Tạo role là ghi vào Neon và liên quan mật khẩu, nên do Phát hoặc Hùng làm.
+- API chạy mọi truy vấn trong `BEGIN READ ONLY ... ROLLBACK` nên **không ghi được dữ liệu kể cả khi dùng `neondb_owner`** (có test với Postgres thật, chạy ở CI qua workflow `api-tests`, xem OPS-13). Dù vậy vẫn nên tạo role chỉ đọc theo `docs/postgres-hosting.md` mục 2 và đặt chuỗi kết nối của nó vào `APP_DATABASE_URL`. Tạo role là ghi vào Neon và liên quan mật khẩu, nên do Phát hoặc Hùng làm.
 
-### OPS-13 · Trung bình · CI cho API chưa bật
-- Workflow `api-tests` (test API và test `PgRepo` với Postgres 17 thật) đã soạn ở `app/api/ci/api-tests.yml` nhưng **chưa nằm trong `.github/workflows/`**: đẩy lên bị GitHub từ chối vì token của `gh` trên máy này thiếu quyền `workflow` (`refusing to allow an OAuth App to create or update workflow`). Để bật: chạy `gh auth refresh -s workflow` (cần trình duyệt), rồi `git mv app/api/ci/api-tests.yml .github/workflows/api-tests.yml` và đẩy. Cho tới lúc đó 5 test Postgres thật của API **chưa được chạy ở đâu**; 43 test còn lại đã qua cục bộ.
+### OPS-13 · ĐÃ XONG (14/11/2026) · CI cho API
+- Workflow `api-tests` (test API và test `PgRepo` với Postgres 17 thật) nằm ở `.github/workflows/api-tests.yml`. Lần đẩy đầu bị GitHub từ chối vì token của `gh` thiếu quyền `workflow`; sau `gh auth refresh -s workflow` đã đẩy được. Kết quả chạy đầu tiên: xem PR #18.
 
 ### OPS-12 · Trung bình · Nơi chạy API
 - Chưa chọn nơi chạy `app/api` (máy k3s, Render, Fly...). API cần Python 3.13, `APP_DATABASE_URL` (hoặc `DATABASE_URL_POOLED`) và `CORS_ORIGINS` (địa chỉ giao diện). Chưa có Dockerfile (chưa thử Docker trên máy này). Đo ngày 14/11 từ máy dev tới Neon: lần gọi đầu khoảng 1,9 giây (kết nối và đọc bảng cây), ô mới khoảng 0,6 giây, cùng ô lần sau khoảng 2 mili giây (bộ nhớ đệm 5 phút).
