@@ -104,11 +104,12 @@ export function countByClass(cells) {                         // inside cells on
 }
 
 /** Words for the difference in mean index between an option and "keep as is". */
-export function tradeoff(delta) {
+export function tradeoff(delta) {                              // `key` picks the sentence in the interface language
   const d = Math.round(delta);
-  if (Math.abs(d) < 300) return { dir: "same", text: "Mức phù hợp tương đương giữ nguyên", delta: d };
-  if (d > 0) return { dir: "up", text: "Mức phù hợp cao hơn giữ nguyên", delta: d };
-  return { dir: "down", text: `Mức phù hợp ${d > -1000 ? "hơi " : ""}thấp hơn giữ nguyên${d > -1000 ? "" : " rõ"}`, delta: d };
+  if (Math.abs(d) < 300) return { dir: "same", key: "trade.same", text: "Mức phù hợp tương đương giữ nguyên", delta: d };
+  if (d > 0) return { dir: "up", key: "trade.up", text: "Mức phù hợp cao hơn giữ nguyên", delta: d };
+  return { dir: "down", key: d > -1000 ? "trade.slightDown" : "trade.clearDown",
+    text: `Mức phù hợp ${d > -1000 ? "hơi " : ""}thấp hơn giữ nguyên${d > -1000 ? "" : " rõ"}`, delta: d };
 }
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

@@ -90,3 +90,14 @@ def test_a_down_database_is_503_not_500():
         assert r.status_code == 503 and r.json()["detail"]["code"] == "db_unavailable"
     finally:
         main.app.dependency_overrides.clear()
+
+
+def test_lang_parameter_end_to_end(client):
+    en = client.get(BASE + "&lang=en").json()
+    assert en["options"][0]["label"] == "Keep as is" and en["lang"] == "en"
+    assert client.get(BASE).json()["options"][0]["label"] == "Giữ nguyên"
+    crops = client.get("/api/crops?lang=en").json()["crops"]
+    assert [c["name"] for c in crops if c["crop_code"] == "RCW"] == ["Wetland rice"]
+    r = client.get(BASE + "&lang=fr")
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "invalid_lang"
+    assert client.get("/api/crops?lang=fr").status_code == 422

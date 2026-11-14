@@ -103,3 +103,31 @@ def test_cells_reject_bad_bbox_and_too_many_cells():
     with pytest.raises(ApiError) as e:
         svc(cells=many).cells(104, 9, 106, 12, "RCW", limit=3)
     assert e.value.status == 413
+
+
+def test_options_in_english_use_english_names_and_sentences():
+    r = svc().options(10.45, 105.35, "RCW", lang="en", priorities=["nitrogen"])
+    assert r["lang"] == "en" and r["options"][0]["label"] == "Keep as is"
+    assert r["options"][0]["names"] == ["Wetland rice"] * 3
+    assert r["current_gaez"]["class"] == "Very suitable"
+    assert r["assumptions"]["gap_rice"]["source"].startswith("Between two wetland-rice crops")
+
+
+def test_default_language_is_still_vietnamese():
+    r = svc().options(10.45, 105.35, "RCW")
+    assert r["lang"] == "vi" and r["options"][0]["label"] == "Giữ nguyên" and r["options"][0]["names"][0] == "Lúa nước"
+
+
+def test_unknown_language_is_a_422():
+    with pytest.raises(ApiError) as e:
+        svc().options(10.45, 105.35, "RCW", lang="fr")
+    assert (e.value.status, e.value.code) == (422, "invalid_lang")
+    with pytest.raises(ApiError):
+        svc().crop_list("de")
+
+
+def test_crop_list_has_both_names_and_a_display_name():
+    en = {c["crop_code"]: c for c in svc().crop_list("en")}
+    vi = {c["crop_code"]: c for c in svc().crop_list("vi")}
+    assert en["RCW"]["name"] == "Wetland rice" and en["RCW"]["name_vi"] == "Lúa nước" and en["RCW"]["name_en"] == "Wetland rice"
+    assert vi["RCW"]["name"] == "Lúa nước"

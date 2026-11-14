@@ -5,6 +5,7 @@ import time
 
 from . import config  # noqa: F401  (puts pipeline/ on sys.path)
 from src.rotation import options as ro
+from src.rotation.crop_names import NAMES_EN
 
 from .grid import OutsideGrid, cell_for
 from .repo import MODES, Repo
@@ -23,10 +24,16 @@ class ApiError(Exception):
 
 def _for_generator(c: dict) -> dict:
     """dim_crop row -> the dict the rotation generator reads (same shape as pipeline/rotation_options.py)."""
-    return {"crop_code": c["crop_code"], "name_vi": c["name_vi"], "life_cycle": c["life_cycle"] or None,
+    return {"crop_code": c["crop_code"], "name_vi": c["name_vi"], "name_en": NAMES_EN.get(c["crop_code"]),
+            "life_cycle": c["life_cycle"] or None,
             "is_legume": bool(c["is_legume"]), "family": c["family"] or None,
             "cycle_days_min": c["cycle_days_min"], "cycle_days_max": c["cycle_days_max"],
             "water_regime": c["water_regime"] or None}
+
+
+def _check_lang(lang: str) -> None:
+    if lang not in ro.LANGS:
+        raise ApiError(422, "invalid_lang", f"lang phải là một trong {', '.join(ro.LANGS)} / lang must be one of {', '.join(ro.LANGS)}")
 
 
 class Service:
@@ -56,12 +63,20 @@ class Service:
         self._cells[key] = (now, values)
         return values
 
-    def crop_list(self) -> list[dict]:
-        return [{**c, "rotatable": ro._usable(_for_generator(c))} for c in self.crops().values()]
+    def crop_list(self, lang: str = "vi") -> list[dict]:
+        """`name` is the display name in `lang`; name_vi and name_en are both returned."""
+        _check_lang(lang)
+        out = []
+        for c in self.crops().values():
+            en = NAMES_EN.get(c["crop_code"])
+            out.append({**c, "name_en": en, "name": (en if lang == "en" and en else c["name_vi"]),
+                        "rotatable": ro._usable(_for_generator(c))})
+        return out
 
     def options(self, lat: float, lon: float, crop: str, *, mode: str = "hrlm", seasons: int | None = None,
                 priorities: list[str] | None = None, min_index: int | None = None,
-                gap_rice: int | None = None, gap_other: int | None = None) -> dict:
+                gap_rice: int | None = None, gap_other: int | None = None, lang: str = "vi") -> dict:
+        _check_lang(lang)
         if mode not in MODES:
             raise ApiError(422, "invalid_mode", f"mode phải là một trong {', '.join(MODES)}")
         try:
@@ -78,7 +93,7 @@ class Service:
         try:
             res = ro.generate(crop, {k: _for_generator(v) for k, v in crops.items()}, suit, mode=mode,
                               seasons=seasons, priorities=priorities, min_index=min_index,
-                              gap_rice=gap_rice, gap_other=gap_other)
+                              gap_rice=gap_rice, gap_other=gap_other, lang=lang)
         except ValueError as e:
             raise ApiError(422, "invalid_argument", str(e))
         res["location"] = {"lat": lat, "lon": lon, "cell_lat": cell.lat, "cell_lon": cell.lon,
