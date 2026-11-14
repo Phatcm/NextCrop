@@ -17,6 +17,13 @@ EARTH_RADIUS_KM = 6371.0088
 QUERY_TOLERANCE = 0.0002                       # centres are stored with 4 decimals; this only absorbs float noise
 
 
+def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance (haversine), in km."""
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2
+    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
+
+
 class OutsideGrid(ValueError):
     """The point is not inside the rectangle the pipeline covers."""
 

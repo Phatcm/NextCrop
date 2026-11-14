@@ -7,13 +7,15 @@ from . import config  # noqa: F401  (puts pipeline/ on sys.path)
 from src.rotation import options as ro
 from src.rotation.crop_names import NAMES_EN
 
-from .grid import OutsideGrid, cell_for
+from .grid import OutsideGrid, cell_for, distance_km
 from .repo import MODES, Repo
 
 CROPS_TTL_SECONDS = 300
 CELL_TTL_SECONDS = 300
 CELL_CACHE_MAX = 512
 MAX_CELLS = 20000
+POWER_MAX_KM = 110          # the nearest NASA POWER cell (0.5 deg) must be this close
+DEMO_AREA_KM = 60           # rain and NDVI exist only for the six demo areas: use one this close or none
 
 
 class ApiError(Exception):
@@ -41,7 +43,8 @@ class Service:
         self.repo, self._clock = repo, clock
         self._crops: dict[str, dict] | None = None
         self._crops_at = 0.0
-        self._cells: dict[tuple[float, float], tuple[float, dict]] = {}
+        self._cells: dict[tuple, tuple[float, dict]] = {}
+        self._power_cells: list[tuple[float, float]] | None = None
 
     def crops(self) -> dict[str, dict]:
         """dim_crop is tiny and changes only when the pipeline reloads: cache it for a few minutes."""
@@ -62,6 +65,53 @@ class Service:
             self._cells.pop(next(iter(self._cells)))          # drop the oldest entry
         self._cells[key] = (now, values)
         return values
+
+    def nasa(self, lat: float, lon: float) -> dict:
+        """NASA context of a point: monthly temperature everywhere (NASA POWER grid, 2015-2025); rain (CHIRPS) and NDVI
+        (NASA MODIS) only when one of the six demo areas is within DEMO_AREA_KM. All values are monthly means over the
+        years of the series, not forecasts. Distances use the centre of the data cell, so a cell has one answer."""
+        try:
+            cell = cell_for(lat, lon)
+        except OutsideGrid as e:
+            raise ApiError(422, "outside_grid", str(e))
+        key, now = ("nasa", cell.lat, cell.lon), self._clock()
+        hit = self._cells.get(key)
+        if hit and now - hit[0] <= CELL_TTL_SECONDS:
+            return {**hit[1], "location": {"lat": lat, "lon": lon, "cell_lat": cell.lat, "cell_lon": cell.lon}}
+        if self._power_cells is None:
+            self._power_cells = self.repo.power_cells()
+        if not self._power_cells:
+            raise ApiError(404, "no_data", "Chưa có dữ liệu NASA POWER.")
+        pc = min(self._power_cells, key=lambda p: distance_km(cell.lat, cell.lon, p[0], p[1]))
+        dist = distance_km(cell.lat, cell.lon, pc[0], pc[1])
+        clim = self.repo.power_climatology(*pc) if dist <= POWER_MAX_KM else {"months": {}}
+        if not clim["months"]:
+            raise ApiError(404, "no_data", "Không có dữ liệu NASA POWER gần điểm này.")
+        nan = float("nan")
+        temperature = {
+            "source": "NASA POWER (MERRA-2) T2M, T2M_MIN, T2M_MAX", "grid_cell": {"lat": pc[0], "lon": pc[1]},
+            "years": list(clim["years"]) if clim.get("years") else None,
+            "months": [{"m": m, "mean": round(v.get("T2M", nan), 1), "min": round(v.get("T2M_MIN", nan), 1),
+                        "max": round(v.get("T2M_MAX", nan), 1)} for m, v in sorted(clim["months"].items())]}
+        area = None
+        regions = [(distance_km(cell.lat, cell.lon, r["center_lat"], r["center_lon"]), r) for r in self.repo.regions()]
+        if regions:
+            d, r = min(regions, key=lambda x: x[0])
+            if d <= DEMO_AREA_KM:
+                rain = self.repo.rain_climatology(r["region_id"])
+                ndvi = self.repo.ndvi_climatology(r["region_id"], r["ndvi_primary"] or "modis_qa")
+                area = {"region_id": r["region_id"], "name": r["name"], "distance_km": round(d),
+                        "rain": {"source": "CHIRPS v3 (bias-corrected rainfall, not NASA)",
+                                 "months": [{"m": m, "mm": round(v, 1)} for m, v, _ in rain],
+                                 "years": max((n for _, _, n in rain), default=0)},
+                        "ndvi": {"source": "NASA MODIS MOD13Q1 (measured, quality-checked 16-day composites)",
+                                 "months": [{"m": m, "mean": round(a, 3), "min": round(lo, 3), "max": round(hi, 3), "n": n}
+                                            for m, a, lo, hi, n in ndvi]}}
+        res = {"temperature": temperature, "demo_area": area}
+        if len(self._cells) >= CELL_CACHE_MAX:
+            self._cells.pop(next(iter(self._cells)))
+        self._cells[key] = (now, res)
+        return {**res, "location": {"lat": lat, "lon": lon, "cell_lat": cell.lat, "cell_lon": cell.lon}}
 
     def crop_list(self, lang: str = "vi") -> list[dict]:
         """`name` is the display name in `lang`; name_vi and name_en are both returned."""

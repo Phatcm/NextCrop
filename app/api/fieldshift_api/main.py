@@ -84,6 +84,14 @@ def options(svc: Annotated[Service, Depends(get_service)],
                        gap_rice=gap_rice, gap_other=gap_other, lang=lang)
 
 
+@app.get("/api/nasa")
+def nasa(svc: Annotated[Service, Depends(get_service)], lat: Annotated[float, Query(ge=-90, le=90)],
+         lon: Annotated[float, Query(ge=-180, le=180)]):
+    """Dữ liệu NASA của một điểm: nhiệt độ theo tháng (NASA POWER, cả nước); mưa (CHIRPS) và NDVI (NASA MODIS) khi
+    điểm nằm gần một trong 6 vùng demo. Là trung bình nhiều năm của từng tháng, không phải dự báo."""
+    return svc.nasa(lat, lon)
+
+
 @app.get("/api/cells")
 def cells(svc: Annotated[Service, Depends(get_service)], west: float, south: float, east: float, north: float,
           crop: str, mode: str = "hrlm", limit: Annotated[int, Query(ge=1, le=20000)] = 6000):

@@ -101,3 +101,14 @@ def test_lang_parameter_end_to_end(client):
     r = client.get(BASE + "&lang=fr")
     assert r.status_code == 422 and r.json()["detail"]["code"] == "invalid_lang"
     assert client.get("/api/crops?lang=fr").status_code == 422
+
+
+def test_nasa_endpoint(client):
+    r = client.get("/api/nasa?lat=10.45&lon=105.35")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["temperature"]["months"]) == 12 and body["demo_area"]["region_id"] == "an_giang_rice"
+    assert client.get("/api/nasa?lat=16&lon=106").json()["detail"]["code"] == "no_data"
+    assert client.get("/api/nasa?lat=30&lon=105").status_code == 422
+    assert client.get("/api/nasa?lat=10.45").status_code == 422
+    assert client.post("/api/nasa?lat=10&lon=105").status_code == 405
