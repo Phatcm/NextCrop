@@ -132,36 +132,78 @@ def report_queries(conn) -> None:
     print("     " + "  ".join(f"{m[5:]}:{float(r):.0f}mm/{float(v)}" for m, r, v in rows))
 
 
+def run_dry_run(silver_root: Path, manifest: dict, catalog: dict) -> int:
+    from src.db import dryrun
+    sql = "\n".join(p.read_text(encoding="utf-8") for p in sorted((ROOT / "db" / "migrations").glob("*.sql")))
+    res = dryrun.dry_run(silver_root, sql)
+    print("\nrows loaded into the DDL proxy (vs rows in the catalog):")
+    mismatch = 0
+    for t, n in res["counts"].items():
+        exp = catalog["datasets"].get(t, {}).get("rows")
+        flag = "" if exp in (None, n) else f"   <-- catalog has {exp:,}"
+        mismatch += bool(flag)
+        print(f"  {t:<22}{n:>10,}{flag}")
+    for w in res["warnings"]:
+        print("  [warn]", w)
+    for e in res["errors"]:
+        print("  [FAIL]", e)
+    ok = not res["errors"] and not mismatch
+    print("\nRESULT: " + ("every row passes PK / FK / CHECK / type rules; a real COPY should succeed on this data."
+                          if ok else "the data would NOT load cleanly, see the lines above."))
+    print("(proxy only: server settings are not covered, run --check-server against the real server)")
+    return 0 if ok else 1
+
+
+def print_server_report(conn) -> int:
+    print("\nServer check")
+    rows = pg.server_report(conn)
+    for name, status, detail in rows:
+        print(f"  [{status}] {name}" + (f"  ({detail})" if detail else ""))
+    failed = [r for r in rows if r[1] == "FAIL"]
+    print("\nRESULT: " + ("server is fit for the load." if not failed else f"{len(failed)} blocking problem(s)."))
+    return 1 if failed else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--local", action="store_true", help="read data/silver instead of pulling from R2")
     ap.add_argument("--migrate-only", action="store_true")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="no server: load silver into a DDL-faithful SQLite proxy with Postgres-strict cell checks")
+    ap.add_argument("--check-server", action="store_true",
+                    help="only report whether the target server is fit for the load (version, encoding, rights, TLS)")
     ap.add_argument("--dsn", help="override DATABASE_URL")
     ap.add_argument("--workdir", help="where to download R2 objects (default: new temp dir)")
     args = ap.parse_args(argv)
 
     load_dotenv(ROOT / ".env")
     cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
+    def open_silver():
+        work = Path(args.workdir) if args.workdir else Path(tempfile.mkdtemp(prefix="fs_silver_"))
+        work.mkdir(parents=True, exist_ok=True)
+        if args.local:
+            manifest, catalog = local_silver(ROOT / cfg.get("data_dir", "data"), work)
+        else:
+            manifest, catalog = pull_silver(r2.make_client(), r2.bucket_name(cfg), work)
+        return work / "silver", manifest, catalog
+
+    if args.dry_run:                     # no server needed
+        return run_dry_run(*open_silver())
+
     dsn = args.dsn or os.environ.get("DATABASE_URL")
     if not dsn:
         ap.error("no database: set DATABASE_URL in .env (postgresql://user:pass@host:5432/db) or pass --dsn")
     conn = pg.connect(dsn)
     try:
         print(f"connected: {conn.run('SELECT current_database(), version()')[0][1].split(',')[0]}")
+        if args.check_server:
+            return print_server_report(conn)
         pg.migrate(conn, ROOT / "db" / "migrations")
         if args.migrate_only:
             return 0
         conn.run(f"SET search_path TO {pg.SCHEMA}, public")
 
-        work = Path(args.workdir) if args.workdir else Path(tempfile.mkdtemp(prefix="fs_silver_"))
-        work.mkdir(parents=True, exist_ok=True)
-        if args.local:
-            manifest, catalog = local_silver(ROOT / cfg.get("data_dir", "data"), work)
-        else:
-            client = r2.make_client()
-            manifest, catalog = pull_silver(client, r2.bucket_name(cfg), work)
-
-        silver_root = work / "silver"
+        silver_root, manifest, catalog = open_silver()
         t0 = time.time()
         counts: dict[str, int] = {}
         conn.run("START TRANSACTION")

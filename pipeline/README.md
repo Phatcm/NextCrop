@@ -55,6 +55,9 @@ python run_etl.py --regions an_giang_rice --skip-gibs --skip-grid
 python upload_r2.py --dry-run           # xem sẽ đẩy gì
 python upload_r2.py --init --prune      # đẩy lên R2 (lần đầu có --init; --prune dọn object cũ)
 python upload_r2.py --verify            # đối chiếu bucket với manifest
+python audit_r2.py                      # kiểm tra dữ liệu trên R2 so với yêu cầu dự án (xem ../docs/data-audit.md)
+python load_postgres.py --dry-run       # không cần server: dữ liệu có qua được PK/FK/CHECK/kiểu của Postgres không
+python load_postgres.py --check-server  # server đích đã đủ điều kiện chưa (phiên bản, UTF8, quyền, TLS)
 python load_postgres.py                 # R2 -> PostgreSQL (DATABASE_URL trong .env)
 ```
 Chạy lại lúc nào cũng an toàn: mọi tải về được cache trong `data/bronze/`, task AppEEARS ghi trong `tasks.json` nên không bao giờ gửi trùng, upload bỏ qua file không đổi.
@@ -77,6 +80,8 @@ _meta/latest.json                                con trỏ tới lần đẩy m�
 `db/migrations/001_init.sql` tạo schema `field_shift`: 13 bảng dữ liệu (cùng tên và cột với bảng silver), khóa chính, khóa ngoại, CHECK, 2 view cho app (`v_region_overview`, `v_crop_ranking`) và bảng `pipeline_run` ghi lại lần nạp nào đang nằm trong DB. App nên đặt `search_path = field_shift`.
 
 `load_postgres.py` kéo silver từ R2 (kiểm tra sha256 từng file), áp migration, rồi `TRUNCATE` + `COPY` + kiểm tra **trong một transaction**: kiểm tra hỏng thì rollback, DB giữ nguyên dữ liệu cũ.
+
+Cấu hình server, role, mạng và TLS khi tự host: [../docs/postgres-hosting.md](../docs/postgres-hosting.md).
 
 Test tích hợp với Postgres thật: `TEST_DATABASE_URL=postgresql://... python -m pytest tests/test_postgres.py` (dùng DB dùng một lần: test xóa và tạo lại schema `field_shift`).
 

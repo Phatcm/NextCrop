@@ -90,6 +90,43 @@ def migrate(conn, migrations_dir: Path, log=print) -> list[str]:
     return applied
 
 
+def server_report(conn) -> list[tuple[str, str, str]]:
+    """Pre-flight facts about the target server: [(check, PASS|WARN|FAIL, detail)].
+    Nothing here writes to the database."""
+    import time
+    out: list[tuple[str, str, str]] = []
+    ver_num = int(conn.run("SHOW server_version_num")[0][0])
+    ver = conn.run("SHOW server_version")[0][0]
+    out.append(("PostgreSQL >= 14", "PASS" if ver_num >= 140000 else "FAIL", ver))
+    enc = conn.run("SHOW server_encoding")[0][0]
+    out.append(("database encoding is UTF8 (Vietnamese names, COPY ... ENCODING 'UTF8')",
+                "PASS" if enc == "UTF8" else "FAIL", enc))
+    user, db = conn.run("SELECT current_user, current_database()")[0]
+    exists = conn.run("SELECT 1 FROM pg_namespace WHERE nspname = :s", s=SCHEMA)
+    if exists:
+        can = conn.run("SELECT has_schema_privilege(current_user, :s, 'CREATE')", s=SCHEMA)[0][0]
+        out.append((f"role {user} can create tables in schema {SCHEMA}", "PASS" if can else "FAIL",
+                    "schema exists" + ("" if can else ": grant CREATE or run as the owner")))
+    else:
+        can = conn.run("SELECT has_database_privilege(current_user, current_database(), 'CREATE')")[0][0]
+        out.append((f"role {user} can create schema {SCHEMA} in {db}", "PASS" if can else "FAIL",
+                    "" if can else f"GRANT CREATE ON DATABASE {db} TO {user}"))
+    ssl_on = conn.run("SELECT coalesce((SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()), false)")[0][0]
+    out.append(("connection is encrypted (TLS)", "PASS" if ssl_on else "WARN",
+                "yes" if ssl_on else "no: add ?sslmode=require to DATABASE_URL and enable ssl on the server"))
+    t = []
+    for _ in range(5):
+        t0 = time.perf_counter()
+        conn.run("SELECT 1")
+        t.append((time.perf_counter() - t0) * 1000)
+    ms = sorted(t)[len(t) // 2]
+    out.append(("round-trip latency", "PASS" if ms < 200 else "WARN", f"{ms:.0f} ms median"))
+    if exists:
+        done = sorted(applied_versions(conn))
+        out.append(("existing schema", "PASS", f"migrations applied: {done or 'none'}"))
+    return out
+
+
 def table_columns(conn, table: str) -> list[str]:
     rows = conn.run("SELECT column_name FROM information_schema.columns WHERE table_schema = :s AND table_name = :t "
                     "ORDER BY ordinal_position", s=SCHEMA, t=table)
