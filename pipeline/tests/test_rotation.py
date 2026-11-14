@@ -12,7 +12,9 @@ CFG = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
 CROPS = {r["crop_code"]: r for r in merge_into_dim_crop(gaez.crop_dim_rows(CFG["gaez"]),
                                                        load_traits(ROOT / "crop_traits.csv"))}
 
-# GAEZ index at the An Giang cell (10.45N 105.35E), rain-fed + high inputs, printed from data/silver/gaez_grid.csv
+# Fixture: GAEZ index at An Giang (10.45N 105.35E), rain-fed + high inputs, read from the earlier total-cell layer
+# (RES05-SXX30AS, 0.1 deg). The current grid is RES05-SUX; these numbers are kept as stable test data, not as a
+# statement about the current grid
 AN_GIANG = {"RCD": 9410, "RCW": 8460, "CSV": 7705, "SPO": 7273, "COW": 7272, "GRD": 7182, "SOY": 6277,
             "TOM": 5781, "ONI": 5110, "MZE": 5056, "WPO": 0, "CAB": 0}
 
@@ -209,7 +211,9 @@ def test_single_season_crop_says_alternatives_are_next_year_crops():
     assert res["seasons"] == 1 and "năm kế tiếp" in res["principle"]
 
 
-# GAEZ index at the Son La cell (21.15N 104.05E), rain-fed + high inputs, printed from data/silver/gaez_grid.csv:
+# Fixture: GAEZ index at Son La (21.15N 104.05E), rain-fed + high inputs, from the earlier total-cell layer
+# (RES05-SXX30AS, 0.1 deg): every annual crop is far below the FAO floor of 4000 (very marginal). Stable test data,
+# not a statement about the current grid:
 # every annual crop is far below the FAO floor of 4000 (very marginal)
 SON_LA = {"MZE": 452, "RCW": 988, "RCD": 981, "CSV": 675, "SPO": 643, "ONI": 635, "COW": 621, "GRD": 620,
           "TOM": 537, "WPO": 495, "CAB": 465, "SOY": 461}

@@ -3,7 +3,7 @@
 Mã: `pipeline/src/rotation/options.py`; thử bằng `python rotation_options.py --lat 10.45 --lon 105.35 --crop RCW` (từ `pipeline/`). Đây là công cụ **hỗ trợ**, không phải lịch gieo hay dự báo năng suất từng ruộng.
 
 ## Đầu vào
-- Vị trí: ô lưới GAEZ gần nhất trong 0,1° (`gaez_grid`); xa hơn thì không trả lời.
+- Vị trí: ô lưới GAEZ gần nhất trong 0,05° (`gaez_grid`: lớp đất canh tác `RES05-SUX`, ô 5 phút cung ~9 km); xa hơn thì không trả lời.
 - Cây hiện tại (một trong các cây một năm của `dim_crop`) và mức đầu vào GAEZ (`hilm/hrlm/lilm/lrlm`, mặc định nước trời + đầu vào cao).
 - Số vụ trong năm: mặc định là số vụ cây hiện tại vừa trong 365 ngày (tối đa 3), có thể ghi đè.
 - **Ba tham số người dùng chỉnh được** (kết quả luôn ghi lại giá trị đã dùng, nguồn và cờ `custom`):

@@ -145,8 +145,7 @@ gaez:
 # DATA-04: GAEZ trên lưới cả nước. Cùng file/lớp/cây/mức với `gaez`, gộp ~0,9 km thành ô cell_deg độ.
 # bbox phải chia hết cho cell_deg (và khớp lưới pixel GAEZ). Hình chữ nhật gồm cả Lào/Campuchia/biển.
 # Đọc từ xa mất khoảng 2 phút/file (96 file); có sẵn file tif đã tải thì dùng --gaez-local-dir.
-gaez_grid:
-  cell_deg: 0.1
+gaez_grid:      # lớp RES05-SUX (đất canh tác, phần tốt nhất của ô), lưới gốc 5 phút cung ~9 km, không gộp ô
   bbox: [102.0, 8.0, 110.0, 24.0]
 
 # GFSAD30SEACE: đất canh tác 30 m năm 2015. Dùng để chỉ giữ điểm MODIS 250 m "thuần ruộng".
