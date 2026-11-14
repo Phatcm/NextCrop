@@ -78,6 +78,17 @@ rain_validation:
   max_bias: 0.30           # POWER lệch hơn 30% so với CHIRPS (theo năm hoặc trung bình) bị đánh dấu
   min_years: 8
 
+# DATA-01 phần 2: họ thực vật (GBIF), giá và năng suất Việt Nam (FAOSTAT, trung bình quốc gia), lớp chống xói mòn.
+# Bảng ánh xạ cây -> tên khoa học, mục FAOSTAT, lớp chống xói mòn: crop_profile_map.csv (viết tay, có cơ sở từng dòng).
+crop_profile:
+  econ_years: [2020, 2024]   # năm dùng để lấy trung bình giá và năng suất (cần cả hai)
+  min_years: 3
+  faostat:
+    prices_zip_url: "https://bulks-faostat.fao.org/production/Prices_E_All_Data_(Normalized).zip"
+    production_zip_url: "https://bulks-faostat.fao.org/production/Production_Crops_Livestock_E_All_Data_(Normalized).zip"
+    first_year: 2015
+    timeout_s: 300
+
 # Lưới khí hậu cả nước (POWER regional: tối đa 10 độ mỗi chiều, 1 tham số mỗi lần gọi).
 vn_grid:
   boxes:   # [lon_min, lat_min, lon_max, lat_max]

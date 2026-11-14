@@ -112,6 +112,19 @@ def validate(conn, counts: dict, catalog: dict, start: int, end: int, cfg: dict 
                            "OR traits_source IS NULL OR family_source IS NULL") == 0)
     rep.check("dim_crop: every crop has a water regime (wetland/upland) and its source",
               scalar(conn, "SELECT count(*) FROM dim_crop WHERE water_regime IS NULL OR water_regime_source IS NULL") == 0)
+    if counts.get("crop_profile"):
+        rep.check("crop_profile: every crop of dim_crop has a profile row",
+                  scalar(conn, "SELECT count(*) FROM dim_crop c WHERE NOT EXISTS "
+                               "(SELECT 1 FROM crop_profile p WHERE p.crop_code = c.crop_code)") == 0)
+        rep.check("crop_profile: GBIF family agrees with dim_crop.family (no mismatch)",
+                  scalar(conn, "SELECT count(*) FROM crop_profile p JOIN dim_crop c USING (crop_code) "
+                               "WHERE p.family_check = 'mismatch' OR (p.gbif_family IS NOT NULL AND p.gbif_family <> c.family)") == 0)
+        rep.check("crop_profile: every crop with a FAOSTAT item has price, yield and revenue",
+                  scalar(conn, "SELECT count(*) FROM crop_profile WHERE faostat_match <> 'none' "
+                               "AND (price_usd_per_t IS NULL OR yield_kg_ha IS NULL OR gross_revenue_usd_ha IS NULL)") == 0)
+        rep.check("crop_profile: revenue = price x yield / 1000 (rounded)",
+                  scalar(conn, "SELECT count(*) FROM crop_profile WHERE gross_revenue_usd_ha IS NOT NULL "
+                               "AND abs(gross_revenue_usd_ha - price_usd_per_t * yield_kg_ha / 1000) > 0.02 * gross_revenue_usd_ha + 1") == 0)
     rep.check("dim_crop: annual crops have a cycle length unless GAEZ has no parameters for them",
               scalar(conn, "SELECT count(*) FROM dim_crop WHERE life_cycle = 'annual' AND cycle_days_min IS NULL "
                            "AND traits_source LIKE '%Appendix 4-6 (A4-6.1%'") == 0)
