@@ -102,6 +102,8 @@ def validate(conn, counts: dict, catalog: dict, start: int, end: int, cfg: dict 
     rep.check("dim_crop: every crop has a life cycle, a family and a source (crop_traits.csv)",
               scalar(conn, "SELECT count(*) FROM dim_crop WHERE life_cycle IS NULL OR family IS NULL "
                            "OR traits_source IS NULL OR family_source IS NULL") == 0)
+    rep.check("dim_crop: every crop has a water regime (wetland/upland) and its source",
+              scalar(conn, "SELECT count(*) FROM dim_crop WHERE water_regime IS NULL OR water_regime_source IS NULL") == 0)
     rep.check("dim_crop: annual crops have a cycle length unless GAEZ has no parameters for them",
               scalar(conn, "SELECT count(*) FROM dim_crop WHERE life_cycle = 'annual' AND cycle_days_min IS NULL "
                            "AND traits_source LIKE '%Appendix 4-6 (A4-6.1%'") == 0)

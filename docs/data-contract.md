@@ -12,7 +12,7 @@ Nguồn thật là [pipeline/db/migrations/001_init.sql](../pipeline/db/migratio
 | Bảng | Khóa | Nội dung |
 |---|---|---|
 | `dim_region` | `region_id` | vùng demo: bbox, tỉnh, vùng sinh thái, kết quả kiểm tra đất canh tác (MODIS và GFSAD) |
-| `dim_crop` | `crop_code` | 24 cây GAEZ, tên tiếng Việt, `name_verified` |
+| `dim_crop` | `crop_code` | 24 cây GAEZ, tên tiếng Việt, `name_verified`, đặc tính cây (migration 003, 005): `res02_code`, `gaez_group`, `life_cycle`, `is_legume`, `family`, `cycle_days_min/max`, `min_temp_c`, `water_regime`, nguồn từng nhóm cột. Trống = chưa có nguồn, không đoán |
 | `power_daily`, `power_monthly` | `region_id` + ngày/tháng | khí hậu NASA POWER 2015–2025. Mưa ngày bị ERA5 phủ nhận (nhiễu của POWER) là `NULL` kèm lý do trong `power_daily.prectotcorr_qa` |
 | `rain_monthly_best` | `region_id, month` | **mưa tháng (mm/tháng) app phải dùng**: CHIRPS v3 (vệ tinh có hiệu chỉnh bằng trạm đo); `best_source = power_fallback` chỉ khi thiếu tháng CHIRPS |
 | `rain_validation` | `region_id, year` | tổng mưa năm POWER so với CHIRPS, `ratio`, `status` (`ok` / `power_high` / `power_low`; lệch > 30%) |

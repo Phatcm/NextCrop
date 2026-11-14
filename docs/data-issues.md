@@ -33,7 +33,7 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 | ID | Mức | Việc | Gợi ý người làm |
 |---|---|---|---|
 | DATA-01 | ~~Nghiêm trọng~~ Đã xử lý phần bảng (còn giá, độ phủ đất, nguồn khuyến nông) | Bảng cây trồng 24 cây đã vào `dim_crop` (PR #4) và đã nạp R2/Neon (14/11) | Hùng + Phát |
-| DATA-02 | Cao | Không có cây/luân canh hiện tại và định nghĩa phương án | Hùng + Phát |
+| DATA-02 | ~~Cao~~ Đã xử lý phần sinh phương án (còn nối vào app) | Bộ sinh 4 phương án mức vụ đã có và có test; app chưa gọi nó | Phát |
 | DATA-03 | Cao | Thiếu đầu vào: độ dốc, bốc thoát hơi nước, thấm nước, đất | Phát |
 | DATA-04 | ~~Trung bình~~ Đã xử lý phần GAEZ | Chỉ 6 vùng có đủ dữ liệu (GAEZ đã có cả nước, xem mục 3) | Cả hai |
 | DATA-05 | ~~Cao~~ Đã xử lý (còn 3 ngày dưới ngưỡng và lưới) | Mưa phi lý (691 mm/ngày) lan sang bảng tháng, năm, chuẩn khí hậu | Phát |
@@ -64,7 +64,9 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
   - Vẫn phải điền tay (có nguồn từng cột): họ thực vật, họ đậu, độ phủ đất, giá.
 - **Xong khi:** mọi cây trong danh sách chốt có đủ cột và nguồn; `python load_postgres.py --dry-run` qua.
 
-### DATA-02 · Cao · Không có cây/luân canh hiện tại, không có định nghĩa phương án
+### DATA-02 · ĐÃ XỬ LÝ phần sinh phương án (14/11/2026) · Không có cây/luân canh hiện tại, không có định nghĩa phương án
+- **Đã làm:** `pipeline/src/rotation/options.py` (thư viện thuần Python), lệnh thử `pipeline/rotation_options.py`, quy tắc ghi ở `docs/rotation-rules.md`, cột `water_regime` (migration `005`). Người dùng chọn cây hiện tại; bộ sinh trả **4 mẫu thay đổi nhỏ** (giữ nguyên, thay 1 vụ bằng cây họ đậu, thay 1 vụ bằng cây khác họ, đổi nhiều vụ mỗi vụ một họ), mỗi mẫu hiện từng thành phần (điểm GAEZ trung bình, cặp vụ cùng họ, họ đậu, số ngày) chứ **không có điểm tổng**, kèm lợi ích, rủi ro, bằng chứng và phần còn thiếu. Ưu tiên người dùng chọn quyết định thứ tự; ưu tiên chưa có dữ liệu (nước, xói mòn, thu nhập, đất) được khai báo là chưa hỗ trợ, không lờ đi.
+- **Chưa làm:** nối vào app (chưa quyết định tính theo yêu cầu hay tính sẵn vào bảng/JSON); thứ tự các vụ (chưa xếp lịch, xem lý do ở dưới); nạp migration `005` lên Neon (làm sau khi PR vào `main`).
 - **Vấn đề:** đề yêu cầu so sánh ≥3 phương án luân canh gồm phương án hiện tại; dữ liệu không có "cây hiện tại" của vùng và không có định nghĩa phương án (chuỗi cây theo mùa).
 - **Hướng xử lý:** quyết định ai định nghĩa. Cách đơn giản: người dùng chọn cây hiện tại trong app, Hùng định nghĩa các mẫu luân canh (bảng `rotation_option`) hoặc quy tắc sinh phương án từ bảng cây trồng (DATA-01, phụ thuộc).
 - **Quyết định 14/11: chấm điểm bằng luật mức vụ, không cộng ngày.** Thử trên dữ liệu thật An Giang: cộng "ngày bắt đầu + độ dài vụ" báo "vừa một năm" nhưng lịch tối ưu của từng cây xung đột (có tưới: lúa ngày 10–160, đậu tương bắt đầu ngày 320 kéo sang ngày 90 năm sau, đè lên lúa; nước trời: lúa kết thúc ngày 318, đậu tương tối ưu từ ngày 261). Lúa 3 vụ không biểu diễn được với 150 ngày/vụ của `CYL` (3 x 150 = 450); nhưng tập giống ứng viên của GAEZ có cả 105 ngày (3 x 105 = 315), nên dùng độ dài ứng viên ngắn nhất làm giả định cho vùng lúa nhiều vụ, ghi rõ trong app. Luật dùng: khác họ liên tiếp, có cây họ đậu trong chuỗi, điểm phù hợp GAEZ (`gaez_grid`), nhu cầu nước không xung đột, nhãn mùa gieo từ `CBD`. Cây lâu năm (cà phê, cao su, chè, điều, dừa) không luân canh theo vụ: loại ra hoặc xử lý riêng.

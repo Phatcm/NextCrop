@@ -11,8 +11,10 @@ import csv
 from pathlib import Path
 
 LIFE_CYCLES = ("annual", "perennial")
+WATER_REGIMES = ("wetland", "upland")      # wetland = grown in flooded fields (paddy rice, wetland taro)
 TRAIT_COLUMNS = ["res02_code", "gaez_group", "life_cycle", "is_legume", "family", "cycle_days_min",
-                 "cycle_days_max", "min_temp_c", "traits_source", "family_source", "notes"]
+                 "cycle_days_max", "min_temp_c", "traits_source", "family_source", "water_regime",
+                 "water_regime_source", "notes"]
 
 
 def _num(text: str, cast, where: str):
@@ -46,6 +48,9 @@ def load_traits(path: Path) -> dict[str, dict]:
             legume = (row.get("is_legume") or "").strip().lower()
             if legume not in ("true", "false", ""):
                 raise ValueError(f"{where}: is_legume must be true or false, got {legume!r}")
+            water = (row.get("water_regime") or "").strip() or None
+            if water is not None and water not in WATER_REGIMES:
+                raise ValueError(f"{where}: water_regime must be one of {WATER_REGIMES}, got {water!r}")
             lo = _num(row.get("cycle_days_min"), int, where)
             hi = _num(row.get("cycle_days_max"), int, where)
             if (lo is None) != (hi is None) or (lo is not None and lo > hi):
@@ -62,6 +67,8 @@ def load_traits(path: Path) -> dict[str, dict]:
                 "min_temp_c": _num(row.get("min_temp_c"), float, where),
                 "traits_source": (row.get("traits_source") or "").strip() or None,
                 "family_source": (row.get("family_source") or "").strip() or None,
+                "water_regime": water,
+                "water_regime_source": (row.get("water_regime_source") or "").strip() or None,
                 "notes": (row.get("notes") or "").strip() or None,
             }
     return out
