@@ -2,6 +2,8 @@
 
 Danh sách việc còn lại, viết để người tiếp theo (Phát) làm tiếp mà không cần hỏi lại. Chi tiết cuộc kiểm tra: [data-audit.md](data-audit.md). Mô hình dữ liệu: [data-contract.md](data-contract.md). Cấu hình Postgres: [postgres-hosting.md](postgres-hosting.md).
 
+Bảng theo dõi (dễ nhìn hơn): Kan board `fieldshift` https://kan-amber.vercel.app/boards/1oixmltk2mz5 (riêng tư). File này vẫn là nguồn chính; khi cập nhật hãy sửa file này rồi đồng bộ lại lên board.
+
 Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc API thật; **[CHƯA KIỂM CHỨNG]** = đề xuất, chưa thử.
 
 ## 1. Trạng thái hiện tại
