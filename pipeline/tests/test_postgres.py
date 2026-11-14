@@ -56,7 +56,8 @@ def test_migrate_copy_and_constraints(tmp_path):
         conn.run(f"DROP SCHEMA IF EXISTS {pg.SCHEMA} CASCADE")
         assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == ["001_init", "002_gaez_grid_rain_qa",
                                                                          "003_crop_traits",
-                                                                         "004_rain_validation"]
+                                                                         "004_rain_validation",
+                                                                         "005_crop_water_regime"]
         assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == []        # idempotent
         conn.run(f"SET search_path TO {pg.SCHEMA}")
 

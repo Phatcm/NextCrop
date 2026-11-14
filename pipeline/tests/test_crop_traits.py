@@ -45,6 +45,21 @@ def test_notes_survive_with_commas_and_diacritics():
     assert "min temp 5 for China tea, 10 for hybrid" in TRAITS["TEA"]["traits_source"]
 
 
+def test_water_regime_is_set_everywhere_and_only_gaez_named_crops_are_wetland():
+    assert all(t["water_regime"] in ("wetland", "upland") and t["water_regime_source"] for t in TRAITS.values())
+    assert {c for c, t in TRAITS.items() if t["water_regime"] == "wetland"} == {"RCW", "TAROW"}
+    assert "RICW" in TRAITS["RCW"]["water_regime_source"] and "RICD" in TRAITS["RCD"]["water_regime_source"]
+    assert all("chưa kiểm chứng" in t["water_regime_source"] for c, t in TRAITS.items()
+               if c not in ("RCW", "RCD", "TAROW"))                      # defaults are labelled as such
+
+
+def test_bad_water_regime_is_rejected(tmp_path):
+    p = tmp_path / "t.csv"
+    p.write_text("crop_code,life_cycle,water_regime\nX,annual,flooded\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="water_regime"):
+        load_traits(p)
+
+
 def test_every_crop_has_family_life_cycle_and_sources():
     for code, t in TRAITS.items():
         assert t["family"] and t["life_cycle"] and t["traits_source"] and t["family_source"], code
