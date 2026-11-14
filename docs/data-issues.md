@@ -14,10 +14,10 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 
 - **Nạp Postgres thật (OPS-01): đã xong.** Neon (PostgreSQL 18.7): 402.709 dòng, 19/19 kiểm tra qua (lần đầu); **14/11 lần nạp thứ hai: 625.429 dòng, 23/23 kiểm tra qua, run `20261114T041950Z`, migration 002 đã áp**, chạy lại lần hai vẫn qua; app đọc được qua cả chuỗi pooled và direct.
 
-**Chưa xong**: bảng cây trồng (DATA-01) và các vấn đề độ chính xác bên dưới.
+**Chưa xong**: phần còn lại của DATA-01 (giá, độ phủ đất, độ dài vụ thực tế ở Việt Nam, họ thực vật có nguồn trích dẫn), nạp bảng cây trồng mới lên R2 và Neon, và các vấn đề độ chính xác bên dưới.
 
 **Vị trí**
-- Mã: repo `Phatcm/field-shift`; PR #1 và PR #2 (DATA-04/05) đã vào `main`.
+- Mã: repo `Phatcm/field-shift`; PR #1, #2 (DATA-04/05) và #4 (DATA-01 phần bảng, migration `003`) đã vào `main`.
 - Dữ liệu sinh ra: `pipeline/data/` trên máy chạy ETL, **không commit**; dựng lại được từ R2 hoặc từ bronze bằng `python run_etl.py --offline`.
 - Database: dự án Neon `tiny-flower-76765987` (tổ chức `org-withered-wave-01543450`, nhánh `production`), schema `field_shift`, đang chứa lần chạy R2 `20261114T030142Z` (xem bảng `pipeline_run`). `DATABASE_URL` (trực tiếp) dùng cho pipeline, `DATABASE_URL_POOLED` cho app. Phát cần được thêm vào tổ chức Neon và tự lấy chuỗi kết nối trong Neon Console.
 - **Bí mật nằm trong `pipeline/.env` chỉ trên máy hiện tại.** Phát cần được cấp riêng (không qua repo hay chat): `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `EARTHDATA_USERNAME`, `EARTHDATA_PASSWORD`, `DATABASE_URL`.
@@ -32,7 +32,7 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 
 | ID | Mức | Việc | Gợi ý người làm |
 |---|---|---|---|
-| DATA-01 | Nghiêm trọng | Thiếu bảng cây trồng | Hùng (theo phân công) |
+| DATA-01 | ~~Nghiêm trọng~~ Đã xử lý phần bảng (còn giá, độ phủ đất, nguồn khuyến nông) | Bảng cây trồng 24 cây đã vào `dim_crop` (PR #4); **chưa nạp R2/Neon** | Hùng + Phát |
 | DATA-02 | Cao | Không có cây/luân canh hiện tại và định nghĩa phương án | Hùng + Phát |
 | DATA-03 | Cao | Thiếu đầu vào: độ dốc, bốc thoát hơi nước, thấm nước, đất | Phát |
 | DATA-04 | ~~Trung bình~~ Đã xử lý phần GAEZ | Chỉ 6 vùng có đủ dữ liệu (GAEZ đã có cả nước, xem mục 3) | Cả hai |
@@ -49,8 +49,10 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 
 ## 3. Vấn đề dữ liệu
 
-### DATA-01 · Nghiêm trọng · Thiếu bảng cây trồng
-- **Vấn đề:** hợp đồng dữ liệu mục 2.2 yêu cầu bảng cây trồng; `dim_crop` hiện chỉ có `crop_code`, `name_vi`, `name_verified` cho 24 cây.
+### DATA-01 · ĐÃ XỬ LÝ phần bảng (14/11/2026, PR #4) · Thiếu bảng cây trồng
+- **Đã làm (PR #4, CI xanh gồm Postgres 17 thật):** `pipeline/crop_traits.csv` cho 24 cây, migration `003_crop_traits.sql`, cột: mã `RES02`, nhóm GAEZ, một năm/lâu năm, họ đậu, họ thực vật, độ dài vụ ứng viên (min/max), nhiệt tối thiểu, nguồn từng nhóm cột. Cây không có dòng trong bảng GAEZ (taro, vừng, điều, dưa hấu) để trống cột sinh trưởng, không đoán. Bộ đọc từ chối dòng sai số cột.
+- **Chưa làm:** nạp lên R2 và Neon (migration `003` chưa áp vào cơ sở dữ liệu thật); giá thị trường; độ phủ đất chống xói mòn; số ngày sinh trưởng thực tế ở Việt Nam; đối chiếu họ thực vật với nguồn trích dẫn; ý nghĩa chính xác của `min_temp_c` (Appendix 4-5).
+- **Vấn đề (trước PR #4):** hợp đồng dữ liệu mục 2.2 yêu cầu bảng cây trồng; `dim_crop` chỉ có `crop_code`, `name_vi`, `name_verified` cho 24 cây.
 - **Bằng chứng:** `python audit_r2.py`, mục I, dòng "crop-table fields ... still missing".
 - **Cột cần có:** họ thực vật (cần cho chu kỳ sâu bệnh, ngoài hợp đồng gốc), mùa trồng, thời gian sinh trưởng (ngày), nhiệt độ thích hợp min/max, ngưỡng rét, ngưỡng nóng, nhu cầu nước (mm), họ đậu (cố định đạm), độ phủ đất/chống xói mòn, giá thị trường, **nguồn của từng cột**.
 - **Hướng xử lý:** điền cho 24 cây (hoặc rút gọn còn nhóm cây dùng để luân canh). Kỹ thuật: thêm cột vào `silver/dim_crop` và migration `002_*.sql` (`ALTER TABLE dim_crop ADD COLUMN ...`), cập nhật `loader` và test. File `pipeline/data/crops_template.csv` cũ chỉ có trên máy local (thư mục `data/` không commit) và đang trống, không dùng được. FAO EcoCrop có thể là nguồn tham số; **[CHƯA KIỂM CHỨNG]** độ phủ cây và giấy phép.
