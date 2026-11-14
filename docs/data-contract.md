@@ -19,7 +19,7 @@ Nguồn thật là [pipeline/db/migrations/001_init.sql](../pipeline/db/migratio
 | `ndvi_series` | `region_id, source_key, date` | NDVI sau QA, `source` = `measured` / `interpolated` / `missing` |
 | `ndvi_raw` | như trên | NDVI trước nội suy, kèm `valid_frac`, `cloud_frac` |
 | `smap_daily` | `region_id, date` | độ ẩm đất SMAP; `sm_recommended` là NULL khi NASA không khuyến nghị |
-| `gaez_suitability` | `region_id, crop_code, input_mode, period, ssp` | mức thích hợp 0–10000, 4 mức đầu vào |
+| `gaez_suitability` | `region_id, crop_code, input_mode, period, ssp` | mức thích hợp 0–10000, 4 mức đầu vào; lớp đất canh tác `RES05-SUX` (cùng `gaez_grid`), thống kê các ô 5 phút cung phủ bbox vùng (`n_px` 4–9) |
 | `gaez_grid` | `lat, lon, crop_code` | GAEZ cả nước, lớp **đất canh tác** `RES05-SUX`, lưới gốc 5 phút cung (~9 km; tâm ô `24 − (i+0,5)/12`, `102 + (j+0,5)/12`): cột `hilm, hrlm, lilm, lrlm` (0–10000, có thể chạm trần 10000) cho mỗi cây; app tra ô gần điểm người dùng chọn (trong 0,05°) |
 | `gfsad_points`, `landcover_by_year`, `landcover_classes`, `terrain` | theo vùng | đất canh tác 30 m, lớp phủ MODIS, độ cao |
 | `vn_grid_monthly` | `lat, lon, param, yyyymm` | lưới khí hậu cả nước (cho bản đồ) |

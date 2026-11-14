@@ -140,3 +140,28 @@ def test_gaez_fetch_uses_cache_offline_and_builds_rows(tmp_path):
     moved = Region.from_dict({"id": "r1", "bbox": [100.0, 19.0, 100.3, 19.2]})
     w2, _ = gaez.fetch_windows(CFG, [moved], tmp_path, offline=True, log=lambda *_: None)
     assert gaez.window_stats(w2[("RCW", "HRLM")]["r1"], moved)["n_valid"] == 2  # offline never refetches
+
+
+def test_layer_is_configurable_and_defaults_to_the_old_total_cell_layer(tmp_path):
+    sux = {**CFG, "layer": "RES05-SUX"}
+    assert gaez.layer_of(CFG) == "RES05-SXX30AS" and gaez.layer_of(sux) == "RES05-SUX"
+    assert gaez.file_url(sux, "RCW", "HRLM") == (
+        "https://storage.googleapis.com/fao-gismgr-gaez-v5-data/DATA/GAEZ-V5/MAPSET/RES05-SUX/"
+        "GAEZ-V5.RES05-SUX.HP0120.AGERA5.HIST.RCW.HRLM.tif")
+    assert gaez.file_url(CFG, "RCW", "HRLM").endswith("RES05-SXX30AS/GAEZ-V5.RES05-SXX30AS.HP0120.AGERA5.HIST.RCW.HRLM.tif")
+
+
+def test_two_layers_never_share_a_cache_and_the_legacy_path_is_unchanged(tmp_path):
+    old = gaez._cache_path(CFG, tmp_path, "RCW", "HRLM")
+    new = gaez._cache_path({**CFG, "layer": "RES05-SUX"}, tmp_path, "RCW", "HRLM")
+    assert old == tmp_path / "HP0120.AGERA5.HIST" / "RCW_HRLM.json"            # existing bronze keeps working
+    assert new == tmp_path / "RES05-SUX" / "HP0120.AGERA5.HIST" / "RCW_HRLM.json" and new != old
+
+
+def test_gold_block_names_the_layer_so_the_app_can_say_what_the_number_is():
+    rows = [{"crop_code": "RCW", "input_mode": "HRLM", "value_mean": 8000.0, "value_median": 8000, "value_min": 7000,
+             "value_max": 9000, "value_center": 8100, "n_valid": 4, "n_px": 4}]
+    sux = gaez.gold_block({**CFG, "layer": "RES05-SUX"}, rows)
+    assert "RES05-SUX" in sux["source"] and sux["layer"] == "RES05-SUX" and "đất canh tác" in sux["layer_note"]
+    old = gaez.gold_block(CFG, rows)
+    assert old["layer"] == "RES05-SXX30AS" and "cả ô" in old["layer_note"]

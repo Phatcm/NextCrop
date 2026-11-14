@@ -7,7 +7,7 @@ distribution of a cell, in proportion to the cropland share. It is read as deliv
 It replaces the earlier version, the total-cell average of RES05-SXX30AS aggregated into 0.1 deg cells. That one
 includes forest and steep land, which pulls hilly cells far down (Son La maize 282-1185 instead of 1728-2485,
 and 55% of the cells had no annual crop at 4000 or more against 9% now); flat deltas barely differ. The per-region
-extractor (gaez.py) still uses RES05-SXX30AS for the 6 demo bboxes.
+extractor (gaez.py, config gaez.layer) reads the same RES05-SUX layer for the 6 demo bboxes, so both tables agree.
 
 The SUX index can reach 10000 in good cells, so crops can tie at the top: do not read small differences there.
 The per-file result is a small 2-D grid cached in bronze/gaez/grid_sux_5arcmin/..., so the run can be replayed

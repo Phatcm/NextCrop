@@ -1,4 +1,11 @@
-"""FAO GAEZ v5 crop suitability (RES05-SXX30AS: continuous index 0-10000, ~0.9 km, int16, nodata -9).
+"""FAO GAEZ v5 crop suitability for the demo regions (continuous index 0-10000, int16, nodata -9).
+
+The layer is chosen by `gaez.layer` in config.yaml:
+- RES05-SUX (current): average suitability index of CURRENT CROPLAND, 5 arc-minute cells (~9 km), the better part of
+  the cell in proportion to its cropland share. Same layer as the nationwide gaez_grid, so the two tables agree.
+  A 0.1 deg region bbox covers only 2-3 cells per side, so n_px is small (4-9).
+- RES05-SXX30AS (default when `layer` is absent): average of the TOTAL cell, ~0.9 km pixels, so n_px is 144.
+  It includes forest and steep land and understates hilly regions (Son La maize 282-1185 against 1728-2485).
 
 Public Google Cloud Storage bucket, one global GeoTIFF (~150 MB) per crop x input level. We never
 download whole files: each file is read with HTTP range requests, only the pixels that cover each
@@ -19,21 +26,32 @@ from pathlib import Path
 from src.geotiff import GeoTiff
 from src.models import Region
 
-BASE_URL = "https://storage.googleapis.com/fao-gismgr-gaez-v5-data/DATA/GAEZ-V5/MAPSET/RES05-SXX30AS"
+BUCKET_URL = "https://storage.googleapis.com/fao-gismgr-gaez-v5-data/DATA/GAEZ-V5/MAPSET"
+DEFAULT_LAYER = "RES05-SXX30AS"
+BASE_URL = f"{BUCKET_URL}/{DEFAULT_LAYER}"
 DEFAULT_NODATA = -9
+LAYER_LABEL = {"RES05-SUX": "đất canh tác, phần tốt nhất của ô 5 phút cung (~9 km)",
+               "RES05-SXX30AS": "trung bình cả ô, pixel ~0,9 km"}
 
 
-def file_name(period: str, climate: str, ssp: str, crop: str, mode: str) -> str:
-    return f"GAEZ-V5.RES05-SXX30AS.{period}.{climate}.{ssp}.{crop}.{mode}.tif"
+def layer_of(cfg: dict) -> str:
+    return cfg.get("layer", DEFAULT_LAYER)
+
+
+def file_name(period: str, climate: str, ssp: str, crop: str, mode: str, layer: str = DEFAULT_LAYER) -> str:
+    return f"GAEZ-V5.{layer}.{period}.{climate}.{ssp}.{crop}.{mode}.tif"
 
 
 def file_url(cfg: dict, crop: str, mode: str) -> str:
-    return f"{cfg.get('base_url', BASE_URL).rstrip('/')}/" + file_name(
-        cfg["period"], cfg["climate"], cfg["ssp"], crop, mode)
+    layer = layer_of(cfg)
+    return f"{cfg.get('base_url', f'{BUCKET_URL}/{layer}').rstrip('/')}/" + file_name(
+        cfg["period"], cfg["climate"], cfg["ssp"], crop, mode, layer)
 
 
 def _cache_path(cfg: dict, bronze_dir: Path, crop: str, mode: str) -> Path:
-    return bronze_dir / f"{cfg['period']}.{cfg['climate']}.{cfg['ssp']}" / f"{crop}_{mode}.json"
+    """Legacy layer keeps its old folder; any other layer gets its own, so two layers never share a cache."""
+    root = bronze_dir if layer_of(cfg) == DEFAULT_LAYER else bronze_dir / layer_of(cfg)
+    return root / f"{cfg['period']}.{cfg['climate']}.{cfg['ssp']}" / f"{crop}_{mode}.json"
 
 
 def _fresh(entry: dict | None, region: Region) -> bool:
@@ -64,7 +82,7 @@ def fetch_windows(cfg: dict, regions: list[Region], bronze_dir: Path, *, offline
         if need and not offline:
             try:
                 url = file_url(cfg, crop, mode)
-                cache.update({"source": "FAO GAEZ v5 RES05-SXX30AS", "url": url})
+                cache.update({"source": f"FAO GAEZ v5 {layer_of(cfg)}", "url": url})
                 cache["windows"].update(_read_windows(url, need))
                 cache["fetched_at"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -139,8 +157,9 @@ def gold_block(cfg: dict, rows: list[dict]) -> dict | None:
         detail.setdefault(r["crop_code"], {})[r["input_mode"]] = {
             k: r[k] for k in ("value_median", "value_min", "value_max", "value_center", "n_valid", "n_px")}
     return {
-        "source": f"FAO GAEZ v5 RES05-SXX30AS, {cfg['period']} ({cfg['climate']}, {cfg['ssp']})",
-        "note": "0-10000, cao = hợp hơn; trung bình vùng bbox (~0,9 km/pixel); mức đầu vào ảnh hưởng rất mạnh; "
+        "source": f"FAO GAEZ v5 {layer_of(cfg)}, {cfg['period']} ({cfg['climate']}, {cfg['ssp']})",
+        "layer": layer_of(cfg), "layer_note": LAYER_LABEL.get(layer_of(cfg)),
+        "note": "0-10000, cao = hợp hơn; trung bình các ô/pixel phủ vùng bbox; mức đầu vào ảnh hưởng rất mạnh; "
                 "là tiềm năng trung bình 20 năm, không phải từng năm",
         "modes": {"HILM": "tưới + đầu vào cao", "HRLM": "mưa + đầu vào cao",
                   "LILM": "tưới + đầu vào thấp", "LRLM": "mưa + đầu vào thấp"},

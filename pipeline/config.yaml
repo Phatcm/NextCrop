@@ -111,6 +111,7 @@ r2:
 # FAO GAEZ v5 RES05-SXX30AS (mức thích hợp cây trồng 0-10000, ~0,9 km). Đọc cửa sổ qua HTTP,
 # không tải cả file 150 MB. Mã cây (3 chữ) đã đối chiếu với cổng GAEZ, xem docs/gaez-notes.md.
 gaez:
+  layer: RES05-SUX    # đất canh tác (cùng lớp với gaez_grid); bỏ dòng này = RES05-SXX30AS trung bình cả ô
   period: HP0120      # 2001-2020
   climate: AGERA5
   ssp: HIST
