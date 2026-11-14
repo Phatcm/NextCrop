@@ -14,17 +14,18 @@ Usage (from pipeline/):
 from __future__ import annotations
 
 import argparse
+import csv
 import sys
 from pathlib import Path
 
 import yaml
 
-from src.extractors import (appeears_client, chirps, era5_rain, faostat, gaez, gaez_env, gaez_grid, gbif, gfsad,
-                            gibs_ndvi, power_client)
+from src.extractors import (appeears_client, boundary, chirps, era5_rain, faostat, gaez, gaez_env, gaez_grid,
+                            gaez_grid_env, gbif, gfsad, gibs_ndvi, power_client)
 from src.http_client import HttpError
 from src.models import Region
 from src.transformers import appeears_transform as at
-from src.transformers import crop_profile, env_inputs, et0
+from src.transformers import crop_profile, env_inputs, et0, grid_env, vn_mask
 from src.transformers.crop_traits import load_traits, merge_into_dim_crop
 from src.transformers.ndvi_qa import build_series
 from src.transformers import rain_validation as rv
@@ -55,6 +56,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="skip the CHIRPS rain reference (silver rain_* tables and gold climate.rain_best are not written)")
     ap.add_argument("--skip-crop-profile", action="store_true",
                     help="skip GBIF family check and FAOSTAT price/yield (silver crop_profile is not written)")
+    ap.add_argument("--skip-vn-mask", action="store_true",
+                    help="skip the Viet Nam boundary mask of the GAEZ grid (silver grid_vietnam is not written)")
+    ap.add_argument("--skip-grid-env", action="store_true",
+                    help="skip slope, soil and water deficit on the nationwide grid (silver grid_environment is not written)")
     ap.add_argument("--skip-gaez-grid", action="store_true", help="skip the Vietnam-wide GAEZ grid (slow: ~45 min)")
     ap.add_argument("--gaez-local-dir", help="folder with already downloaded GAEZ GeoTIFFs (same file names) for the grid")
     ap.add_argument("--no-wait", action="store_true", help="don't wait for AppEEARS tasks to finish")
@@ -254,6 +259,46 @@ def main(argv: list[str] | None = None) -> int:
                   f"({len({(r['lat'], r['lon']) for r in rows}):,} cells)")
         elif rows:
             print("  [gaez-grid] incomplete: silver/gaez_grid.csv NOT written (would silently miss crop x mode values)")
+
+    # 4d2) DATA-14: share of every grid cell inside Viet Nam, so the app can refuse points in Laos/Cambodia/China/sea
+    if not args.skip_vn_mask and "vn_boundary" in cfg and (silver / "gaez_grid.csv").exists():
+        print("== Viet Nam boundary mask for the GAEZ grid")
+        bcfg = cfg["vn_boundary"]
+        try:
+            geo = boundary.fetch(bcfg, bronze / "boundary", offline=args.offline)
+            with (silver / "gaez_grid.csv").open(encoding="utf-8-sig", newline="") as f:
+                cells = [(float(r["lat"]), float(r["lon"])) for r in csv.DictReader(f)]
+            rows = vn_mask.build_rows(cells, geo, bcfg["cell_deg"], n=bcfg.get("lattice", 8),
+                                      min_share=bcfg.get("min_share", 0.5))
+            write_csv(silver / "grid_vietnam.csv", rows)
+            print(f"  [vn-mask] {(silver / 'grid_vietnam.csv').relative_to(ROOT)}: {len(rows):,} cells, "
+                  f"{sum(r['in_vietnam'] for r in rows):,} inside Viet Nam ({boundary.ATTRIBUTION})")
+        except (HttpError, ValueError, KeyError) as e:
+            problems.append(f"vn mask: {e} (silver grid_vietnam NOT written)")
+
+    # 4d3) DATA-17: slope, soil and water deficit for every grid cell inside Viet Nam (same GAEZ layers as the region tables)
+    if (not args.skip_grid_env and "grid_environment" in cfg and "gaez_grid" in cfg and "gaez" in cfg
+            and (silver / "grid_vietnam.csv").exists()):
+        print("== environment inputs on the nationwide grid (slope / soil / water deficit)")
+        gcfg = dict(cfg["grid_environment"])
+        gg_ = cfg["gaez"]
+        gcfg["water_deficit"] = {"period": gg_["period"], "climate": gg_["climate"], "ssp": gg_["ssp"],
+                                 "modes": cfg["environment"].get("water_deficit_modes", ["HILM", "LILM"]),
+                                 "crops": [c["code"] for c in gg_["crops"]]}
+        gbbox = cfg["gaez_grid"]["bbox"]
+        layers, lprob = gaez_grid_env.fetch_layers(gcfg, gbbox, bronze / "gaez_env_grid", offline=args.offline,
+                                                   workers=gcfg.get("workers", 4))
+        with (silver / "grid_vietnam.csv").open(encoding="utf-8-sig", newline="") as f:
+            inside = [(float(r["lat"]), float(r["lon"])) for r in csv.DictReader(f) if r["in_vietnam"] == "True"]
+        if lprob:
+            problems += [f"grid environment: {p} (silver grid_environment / grid_water_demand NOT written)" for p in lprob]
+        else:
+            env_rows, wd_rows, bprob = grid_env.build_rows(layers, inside, gbbox, {**gcfg, **(cfg["environment"].get("erosion") or {})})
+            problems += [f"grid environment: {p}" for p in bprob]
+            write_csv(silver / "grid_environment.csv", env_rows)
+            write_csv(silver / "grid_water_demand.csv", wd_rows)
+            print(f"  [grid-env] {len(env_rows):,} of {len(inside):,} cells inside Viet Nam have slope or soil; "
+                  f"{len(wd_rows):,} cell x crop x mode water-deficit rows")
 
     modis = at.modis_ndvi_observations(ae_rows["ndvi"], cfg["appeears"]["ndvi_qa"]["accept_reliability"],
                                        allowed) if "ndvi" in ae_rows else {}

@@ -19,10 +19,12 @@ BRONZE_SOURCES = {
     "gfsad": "usgs_gfsad30seace",
     "gaez": "fao_gaez_v5",
     "gaez_env": "fao_gaez_v5_environment",
+    "gaez_env_grid": "fao_gaez_v5_environment_grid",
     "era5": "open_meteo_era5",
     "chirps": "chc_chirps_v3",
     "gbif": "gbif_backbone",
     "faostat": "fao_faostat",
+    "boundary": "geoboundaries_vnm_adm0",
 }
 
 # Natural (primary) key of every silver dataset. Uploads are blocked if a key is not unique.
@@ -38,6 +40,9 @@ DATASET_KEYS: dict[str, list[str]] = {
     "ndvi_raw": ["region_id", "source_key", "date"],
     "gaez_suitability": ["region_id", "crop_code", "input_mode", "period", "ssp"],
     "gaez_grid": ["lat", "lon", "crop_code"],
+    "grid_vietnam": ["lat", "lon"],
+    "grid_environment": ["lat", "lon"],
+    "grid_water_demand": ["lat", "lon", "crop_code", "input_mode"],
     "smap_daily": ["region_id", "date"],
     "gfsad_points": ["point"],
     "landcover_by_year": ["region_id", "year"],

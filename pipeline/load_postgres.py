@@ -176,6 +176,47 @@ def validate(conn, counts: dict, catalog: dict, start: int, end: int, cfg: dict 
             rep.check("gaez_grid: every demo region centre has a grid cell within 0.05 deg",
                       scalar(conn, "SELECT count(*) FROM dim_region r WHERE NOT EXISTS (SELECT 1 FROM gaez_grid g "
                                    "WHERE abs(g.lat - r.center_lat) <= 0.05 AND abs(g.lon - r.center_lon) <= 0.05)") == 0)
+        if counts.get("grid_vietnam") and counts.get("gaez_grid"):
+            rep.check("grid_vietnam: one row for every distinct cell of gaez_grid",
+                      scalar(conn, "SELECT count(*) FROM (SELECT DISTINCT lat, lon FROM gaez_grid) g "
+                                   "LEFT JOIN grid_vietnam v USING (lat, lon) WHERE v.lat IS NULL") == 0
+                      and counts["grid_vietnam"] == scalar(conn, "SELECT count(*) FROM (SELECT DISTINCT lat, lon FROM gaez_grid) g"))
+            rep.check("grid_vietnam: every demo region centre falls in a cell inside Viet Nam",
+                      scalar(conn, "SELECT count(*) FROM dim_region r WHERE NOT EXISTS (SELECT 1 FROM grid_vietnam v "
+                                   "WHERE v.in_vietnam AND abs(v.lat - r.center_lat) <= 0.05 AND abs(v.lon - r.center_lon) <= 0.05)") == 0)
+            rep.check("grid_vietnam: the mask separates inside from outside (some cells in, some out, one threshold)",
+                      scalar(conn, "SELECT count(*) FROM grid_vietnam WHERE in_vietnam") > 0
+                      and scalar(conn, "SELECT count(*) FROM grid_vietnam WHERE NOT in_vietnam") > 0
+                      and scalar(conn, "SELECT coalesce(min(vn_share) FILTER (WHERE in_vietnam), 1) >= "
+                                       "coalesce(max(vn_share) FILTER (WHERE NOT in_vietnam), 0) FROM grid_vietnam"))
+        if counts.get("grid_environment"):
+            rep.check("grid_environment: only cells inside Viet Nam (grid_vietnam.in_vietnam)",
+                      scalar(conn, "SELECT count(*) FROM grid_environment e LEFT JOIN grid_vietnam v USING (lat, lon) "
+                                   "WHERE v.in_vietnam IS NOT TRUE") == 0)
+            rep.check("grid_environment: at least 90% of the cells inside Viet Nam have slope and a soil rating",
+                      scalar(conn, "SELECT count(*) FILTER (WHERE e.slope_mean_pct IS NOT NULL AND e.soil_limiting_him IS NOT NULL)"
+                                   "::float / NULLIF(count(*), 0) >= 0.9 FROM grid_vietnam v LEFT JOIN grid_environment e "
+                                   "USING (lat, lon) WHERE v.in_vietnam"))
+            rep.check("grid_environment: share > 24% never exceeds share > 12%, and slope_class matches the config rule",
+                      scalar(conn, "SELECT count(*) FROM grid_environment WHERE share_gt24_pct > share_gt12_pct + 0.05 "
+                                   "OR (share_gt12_pct IS NOT NULL) <> (slope_class IS NOT NULL)") == 0)
+            rep.check("grid_environment: every demo region centre has slope and soil in its cell",
+                      scalar(conn, "SELECT count(*) FROM dim_region r WHERE NOT EXISTS (SELECT 1 FROM grid_environment e "
+                                   "WHERE e.slope_mean_pct IS NOT NULL AND e.soil_limiting_him IS NOT NULL "
+                                   "AND abs(e.lat - r.center_lat) <= 0.05 AND abs(e.lon - r.center_lon) <= 0.05)") == 0)
+            if counts.get("terrain_slope") and counts.get("soil_quality"):
+                rep.check("grid_environment agrees with the region tables where they overlap (slope within 3 points, "
+                          "soil rating within 0.08 at each demo region centre)",
+                          scalar(conn, "SELECT count(*) FROM dim_region r JOIN terrain_slope t USING (region_id) "
+                                       "JOIN soil_quality s ON s.region_id = r.region_id AND s.factor = 'SQ0' AND s.input_level = 'HIM' "
+                                       "JOIN LATERAL (SELECT * FROM grid_environment e ORDER BY abs(e.lat - r.center_lat) + "
+                                       "abs(e.lon - r.center_lon) LIMIT 1) e ON true "
+                                       "WHERE abs(e.slope_mean_pct - t.slope_mean_pct) > 3 "
+                                       "OR abs(e.soil_limiting_him - s.rating_mean) > 0.08") == 0)
+        if counts.get("grid_water_demand"):
+            rep.check("grid_water_demand: only cells inside Viet Nam, one row per crop and irrigated mode at most",
+                      scalar(conn, "SELECT count(*) FROM grid_water_demand w LEFT JOIN grid_vietnam v USING (lat, lon) "
+                                   "WHERE v.in_vietnam IS NOT TRUE") == 0)
         rep.check("gaez: rows with n_valid = 0 have no value",
                   scalar(conn, "SELECT count(*) FROM gaez_suitability WHERE n_valid = 0 AND value_mean IS NOT NULL") == 0)
     return rep

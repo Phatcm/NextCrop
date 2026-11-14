@@ -36,7 +36,7 @@ def test_ddl_types_and_translation_cover_every_table():
     assert types["power_daily"]["prectotcorr_qa"] == "text"          # added by ALTER in 002
     assert types["gaez_grid"]["hrlm"] == "smallint" and types["gaez_grid"]["lat"] == "double precision"
     ddl, views = dryrun.translate(stmts, pg.LOAD_ORDER)
-    assert sum(s.startswith("CREATE TABLE") for s in ddl) == 22 and len(views) == 2
+    assert sum(s.startswith("CREATE TABLE") for s in ddl) == 25 and len(views) == 2
     assert not any(" ~ " in s for s in ddl)
 
 

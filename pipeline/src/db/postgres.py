@@ -11,7 +11,7 @@ SCHEMA = "field_shift"
 LOAD_ORDER = ["dim_region", "dim_crop", "crop_profile", "power_daily", "power_monthly", "rain_validation", "rain_monthly_best", "terrain_slope", "soil_quality", "crop_water_demand",
               "water_balance_monthly", "erosion_context", "ndvi_series", "ndvi_raw", "smap_daily",
               "gfsad_points", "landcover_by_year", "landcover_classes", "terrain", "gaez_suitability",
-              "gaez_grid", "vn_grid_monthly"]
+              "gaez_grid", "grid_vietnam", "grid_environment", "grid_water_demand", "vn_grid_monthly"]
 
 
 def parse_dsn(dsn: str) -> dict:
