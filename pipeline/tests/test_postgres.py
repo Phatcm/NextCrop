@@ -54,7 +54,8 @@ def test_migrate_copy_and_constraints(tmp_path):
     conn = pg.connect(os.environ["TEST_DATABASE_URL"])
     try:
         conn.run(f"DROP SCHEMA IF EXISTS {pg.SCHEMA} CASCADE")
-        assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == ["001_init", "002_gaez_grid_rain_qa"]
+        assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == ["001_init", "002_gaez_grid_rain_qa",
+                                                                         "003_crop_traits"]
         assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == []        # idempotent
         conn.run(f"SET search_path TO {pg.SCHEMA}")
 
@@ -93,6 +94,19 @@ def test_migrate_copy_and_constraints(tmp_path):
         assert conn.run("SELECT hrlm, lrlm FROM gaez_grid WHERE crop_code = 'RCW'") == [[7600, None]]
         with pytest.raises(Exception):   # out-of-range value -> CHECK
             pg.copy_csv(conn, "gaez_grid", csv("gg2.csv", "lat,lon,crop_code,hilm\n10.55,105.35,RCW,10001\n"))
+        # crop traits (migration 003)
+        pg.copy_csv(conn, "dim_crop", csv("c2.csv",
+            "crop_code,name_vi,name_verified,life_cycle,is_legume,cycle_days_min,cycle_days_max\n"
+            "SOY,Đậu tương,True,annual,True,105,135\nCOF,Cà phê,True,perennial,False,,\n"))
+        assert conn.run("SELECT is_legume FROM dim_crop WHERE crop_code = 'SOY'") == [[True]]
+        with pytest.raises(Exception):   # perennial crop with a per-season cycle -> CHECK
+            pg.copy_csv(conn, "dim_crop", csv("c3.csv",
+                "crop_code,name_vi,name_verified,life_cycle,cycle_days_min,cycle_days_max\n"
+                "RUB,Cao su,True,perennial,300,300\n"))
+        with pytest.raises(Exception):   # min > max -> CHECK
+            pg.copy_csv(conn, "dim_crop", csv("c4.csv",
+                "crop_code,name_vi,name_verified,life_cycle,cycle_days_min,cycle_days_max\n"
+                "CSV,Sắn,True,annual,270,210\n"))
         with pytest.raises(Exception):   # unknown region -> foreign key
             pg.copy_csv(conn, "power_monthly", csv("m.csv", "region_id,month\nnope,2015-01\n"))
         with pytest.raises(Exception):   # out-of-range value -> CHECK
