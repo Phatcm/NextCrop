@@ -43,6 +43,9 @@ View cho app: `v_region_overview` (một dòng mỗi vùng kèm số liệu đ�
 - `dim_region.status = 'candidate'`: tọa độ chưa xác nhận ngoài thực địa.
 - Mỗi vùng là một khung ~0,1° (~11 km); dữ liệu POWER ~0,5° nên không phân biệt từng thửa ruộng.
 
+## API cho app (`app/api`)
+App không nối thẳng Postgres: nó gọi API chỉ đọc (FastAPI), API chạy mọi truy vấn trong `BEGIN READ ONLY` và gọi bộ sinh phương án `pipeline/src/rotation`. Điểm người dùng chọn được đổi thành **ô lưới chứa điểm** (cùng quy ước tâm ô ở trên), không phải ô gần nhất; điểm ngoài khung 102–110°E, 8–24°N bị từ chối (422), ô không có dữ liệu (biển) trả 404. DATA-14 vẫn mở: điểm ở Lào hoặc Campuchia trong khung vẫn nhận kết quả. Endpoint và mã lỗi: [../app/api/README.md](../app/api/README.md).
+
 ## R2
 Cấu trúc bucket, manifest và catalog: xem `pipeline/README.md` (mục Cloudflare R2). Bản JSON "gold" (`gold/v<schema>/<vùng>.json`) vẫn được tạo, dùng khi cần xuất file tĩnh hoặc kiểm tra nhanh; không phải đường đọc chính của app.
 
@@ -50,4 +53,4 @@ Cấu trúc bucket, manifest và catalog: xem `pipeline/README.md` (mục Cloudf
 Bảng cây trồng (mùa trồng, thời gian sinh trưởng, ngưỡng nhiệt, nhu cầu nước, họ đậu, độ phủ đất, giá thị trường, họ thực vật) chưa có trong dữ liệu. Kết quả kiểm tra đầy đủ và các vấn đề độ chính xác: [data-audit.md](data-audit.md).
 
 ## Điều cần chốt (Phat và Hùng)
-Danh sách vùng demo cuối cùng (hiện có 6 vùng, 5 vùng còn là `candidate`); cách app truy cập Postgres (kết nối trực tiếp hay qua API); phiên bản Postgres và nhà cung cấp; có cần `R2_PUBLIC_BASE_URL` cho file tĩnh hay không.
+Danh sách vùng demo cuối cùng (hiện có 6 vùng, 5 vùng còn là `candidate`); nơi chạy API của app (cách truy cập đã chốt: qua `app/api`); phiên bản Postgres và nhà cung cấp; có cần `R2_PUBLIC_BASE_URL` cho file tĩnh hay không.
