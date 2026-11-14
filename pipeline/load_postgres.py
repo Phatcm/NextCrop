@@ -99,6 +99,12 @@ def validate(conn, counts: dict, catalog: dict, start: int, end: int, cfg: dict 
     # days above the fixed limit may survive on purpose when ERA5 confirmed them (typhoons), so the bound is physical
     rep.check("power_daily: no rain above 1000 mm/day (physical sanity bound)",
               scalar(conn, "SELECT count(*) FROM power_daily WHERE prectotcorr > 1000") == 0)
+    rep.check("dim_crop: every crop has a life cycle, a family and a source (crop_traits.csv)",
+              scalar(conn, "SELECT count(*) FROM dim_crop WHERE life_cycle IS NULL OR family IS NULL "
+                           "OR traits_source IS NULL OR family_source IS NULL") == 0)
+    rep.check("dim_crop: annual crops have a cycle length unless GAEZ has no parameters for them",
+              scalar(conn, "SELECT count(*) FROM dim_crop WHERE life_cycle = 'annual' AND cycle_days_min IS NULL "
+                           "AND traits_source LIKE '%Appendix 4-6 (A4-6.1%'") == 0)
     rep.check("power_daily: t2m in [-10, 45] C", scalar(conn, "SELECT count(*) FROM power_daily WHERE t2m NOT BETWEEN -10 AND 45") == 0)
     rep.check("every region has NDVI from its primary source",
               scalar(conn, "SELECT count(*) FROM dim_region r WHERE r.ndvi_primary IS NOT NULL AND NOT EXISTS "

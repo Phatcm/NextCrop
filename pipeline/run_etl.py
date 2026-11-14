@@ -23,6 +23,7 @@ from src.extractors import appeears_client, era5_rain, gaez, gaez_grid, gfsad, g
 from src.http_client import HttpError
 from src.models import Region
 from src.transformers import appeears_transform as at
+from src.transformers.crop_traits import load_traits, merge_into_dim_crop
 from src.transformers.ndvi_qa import build_series
 from src.transformers.rain_qa import apply_rain_qa
 from src.transformers.silver_to_gold import (build_region_gold, write_csv, write_dim_crop, write_dim_region,
@@ -194,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  [gaez] {region.id}: {len(rows)}/{expected} crop x mode values")
             if len(rows) < expected:
                 problems.append(f"gaez {region.id}: only {len(rows)}/{expected} values")
-        write_dim_crop(silver, gaez.crop_dim_rows(gcfg))
+        write_dim_crop(silver, merge_into_dim_crop(gaez.crop_dim_rows(gcfg), load_traits(ROOT / "crop_traits.csv")))
 
     # 4d) FAO GAEZ on a nationwide grid (DATA-04): any clicked point gets a suitability value
     if not args.skip_gaez_grid and "gaez" in cfg and "gaez_grid" in cfg:
