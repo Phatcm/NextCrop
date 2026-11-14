@@ -28,4 +28,4 @@ _(bổ sung khi có mã)_
 - FAO & IIASA. 2025. Global Agro-ecological Zoning version 5 (GAEZ v5) Model Documentation (CC BY 4.0)
 
 ## Công cụ AI đã dùng
-_(ghi rõ công cụ và mục đích khi nộp bài)_
+- **Claude Code** (Anthropic) được dùng trong dự án (xem README gốc). Phần dùng cho mã ứng dụng sẽ được ghi cụ thể tại đây khi có.

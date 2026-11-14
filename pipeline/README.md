@@ -99,4 +99,4 @@ Test tích hợp với Postgres thật: `TEST_DATABASE_URL=postgresql://... pyth
 - NASA POWER, MODIS, SMAP, GFSAD30, NASADEM: dữ liệu mở của NASA.
 
 ## Công cụ AI đã dùng
-_(ghi rõ công cụ và mục đích khi nộp bài)_
+- **Claude Code** (Anthropic): viết và kiểm thử mã ETL, nạp R2/PostgreSQL, QA mưa (đối chiếu ERA5), lưới GAEZ cả nước, kiểm tra dữ liệu và soạn tài liệu. Con người quyết định nguồn dữ liệu, ngưỡng, và duyệt kết quả.

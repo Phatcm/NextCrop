@@ -147,7 +147,7 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - README gốc và `data-contract.md` đã sửa theo quyết định dùng PostgreSQL; `app/README.md` chưa sửa (người làm app cập nhật).
 
 ### OPS-07 · Trung bình · Thể lệ và hồ sơ nộp
-- Mục "Công cụ AI đã dùng" trong ba README còn trống; cần khai báo (Claude dùng cho mã pipeline, kiểm tra dữ liệu, tài liệu).
+- Mục "Công cụ AI đã dùng" trong ba README đã điền (Claude Code); khi nộp bài cần khai báo lại trong biểu mẫu và bổ sung nếu dùng cho mã app.
 - Quy định: phần lõi làm trong 14–15/11 và lịch sử commit là bằng chứng. Quyết định thời điểm mở PR và merge.
 
 ### OPS-08 · Thấp · Danh tính commit
