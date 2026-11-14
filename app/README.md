@@ -18,6 +18,8 @@ App đọc **PostgreSQL (Neon) qua API trong `app/api/`**, **không gọi API ng
 api/        backend FastAPI (chỉ đọc): phương án luân canh, danh sách cây, ô lưới cho bản đồ. Xem api/README.md
 web/        giao diện: HTML, CSS và JavaScript thuần (không build), MapLibre cho bản đồ. API phục vụ luôn thư mục này ở "/"
 ```
+Giao diện có **hai ngôn ngữ, Việt và Anh**, nút VI/EN ở đầu trang (bên trái nút "Xem chi tiết"). Ngôn ngữ mặc định theo trình duyệt (trình duyệt tiếng Việt thì tiếng Việt, còn lại tiếng Anh) và được nhớ. Chữ của giao diện nằm trong `web/js/i18n.js`; chữ do bộ sinh phương án viết lấy từ API qua tham số `lang`.
+
 Quyết định (14/11, Hùng chốt): giao diện là file tĩnh do chính API phục vụ, nên một container Python là đủ và không cần CORS. Chuyển sang framework (React...) để sau cuộc thi nếu cần.
 
 ## Chạy

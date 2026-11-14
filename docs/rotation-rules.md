@@ -53,6 +53,9 @@ Người dùng được phép hạ `min_index` (quyết định 14/11). Giao di�
 - Khi sau ngưỡng chỉ còn dưới 3 phương án (ví dụ Sơn La: cả 12 cây một năm đều dưới 1000), kết quả có `floor_hint`: ngưỡng cao nhất (làm tròn xuống 100) để có đủ 3 phương án, số phương án, các lớp sẽ xuất hiện và `below_fao_floor`. Nếu hạ đến mức thấp nhất vẫn không đủ thì `floor_hint.min_index` là `null` kèm lý do. Đủ 3 phương án thì `floor_hint` là `null`.
 - Khi mọi cây đều trong lớp "rất biên", chênh lệch chỉ số giữa các cây (ví dụ 988 và 620) gần như không có ý nghĩa; giao diện nên nói thẳng "tất cả cây đều rất biên".
 
+## Ngôn ngữ
+`generate(..., lang="vi" | "en")` (và `?lang=` của API, `--lang` chưa có ở dòng lệnh) chọn ngôn ngữ của mọi câu chữ trong kết quả: tên phương án, lợi ích, rủi ro, cảnh báo, gợi ý hạ ngưỡng, giả định và nguồn, bảng lớp độ phù hợp, phần "chưa xét". Chữ nằm trong hai bảng `STRINGS["vi"]` và `STRINGS["en"]` (`pipeline/src/rotation/options.py`), cùng khoá và cùng chỗ điền; test `tests/test_rotation_en.py` kiểm tra hai bảng khớp nhau, bản tiếng Anh không lẫn chữ Việt, và **ngôn ngữ chỉ đổi chữ, không đổi phương án** (cùng thứ tự, cùng cây, cùng điểm). Tiếng Việt là mặc định và đầu ra không đổi so với trước khi có tiếng Anh (đã so 41.293 lần chạy trên 347 ô thật). Tên cây: tiếng Việt từ `dim_crop.name_vi`, tiếng Anh từ `crop_names.py`; cây thiếu tên tiếng Anh dùng tên tiếng Việt.
+
 ## Giới hạn phải nói rõ với người dùng
 - **Thứ tự các vụ không được xếp lịch.** GAEZ chỉ cho ngày gieo tối ưu của từng cây đứng riêng, không cho cây đứng sau cây khác, và giá trị nhiễu giữa các ô kề nhau. `sequence` chỉ là liệt kê chuẩn (cây giữ lại trước, rồi cây thay thế theo điểm GAEZ).
 - **Độ dài vụ lấy giống ngắn nhất** mà GAEZ thử (lúa 105 ngày). Vụ thực tế có thể dài hơn.

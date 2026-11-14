@@ -63,9 +63,10 @@ def health(repo: Annotated[Repo | None, Depends(get_repo)]):
 
 
 @app.get("/api/crops")
-def crops(svc: Annotated[Service, Depends(get_service)]):
-    """Tất cả cây trong dữ liệu. `rotatable=false` (cây lâu năm hoặc thiếu độ dài vụ) không có phương án luân canh."""
-    return {"crops": svc.crop_list()}
+def crops(svc: Annotated[Service, Depends(get_service)], lang: str = "vi"):
+    """Tất cả cây trong dữ liệu. `rotatable=false` (cây lâu năm hoặc thiếu độ dài vụ) không có phương án luân canh.
+    `name` là tên hiển thị theo `lang` (vi hoặc en)."""
+    return {"crops": svc.crop_list(lang)}
 
 
 @app.get("/api/options")
@@ -76,10 +77,11 @@ def options(svc: Annotated[Service, Depends(get_service)],
             priorities: Annotated[list[str] | None, Query()] = None,
             min_index: Annotated[int | None, Query(ge=0, le=10000)] = None,
             gap_rice: Annotated[int | None, Query(ge=0, le=60)] = None,
-            gap_other: Annotated[int | None, Query(ge=0, le=60)] = None):
-    """Phương án luân canh cho một điểm và cây hiện tại. Phương án đầu tiên luôn là giữ nguyên."""
+            gap_other: Annotated[int | None, Query(ge=0, le=60)] = None, lang: str = "vi"):
+    """Phương án luân canh cho một điểm và cây hiện tại. Phương án đầu tiên luôn là giữ nguyên.
+    `lang` (vi mặc định, hoặc en) chọn ngôn ngữ của mọi câu chữ trong kết quả."""
     return svc.options(lat, lon, crop, mode=mode, seasons=seasons, priorities=priorities, min_index=min_index,
-                       gap_rice=gap_rice, gap_other=gap_other)
+                       gap_rice=gap_rice, gap_other=gap_other, lang=lang)
 
 
 @app.get("/api/cells")
