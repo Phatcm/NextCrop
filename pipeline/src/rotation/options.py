@@ -256,13 +256,17 @@ def generate(cur_code: str, crops: dict[str, dict], suit: dict[str, int | None],
     if n < 2:
         skip("diverse", "Chỉ có 1 vụ trong năm với cây này, không có chỗ để đa dạng hóa.")
     else:
-        replace = n - 1 if n >= 3 else n
-        seq = _best_diverse(cur_code, n, replace, pool, crops, suit, gaps)
-        if seq:
+        # the main crop stays in at least one season: n - 1 seasons are replaced, never all of them
+        seq = _best_diverse(cur_code, n, n - 1, pool, crops, suit, gaps)
+        twin = next((o["id"] for o in options if seq and sorted(o["sequence"]) == sorted(seq)), None)
+        if not seq:
+            skip("diverse", "Không có tổ hợp cây khác họ đủ điều kiện.")
+        elif twin:
+            skip("diverse", f"Trùng với phương án '{twin}': khi chỉ có {n} vụ, giữ 1 vụ cây hiện tại và chỉ còn "
+                            f"thay {n - 1} vụ.")
+        else:
             options.append(_describe("diverse", "Đổi nhiều vụ, mỗi vụ một họ", seq, cur_code, crops, suit, mode,
                                      gaps, base_mean))
-        else:
-            skip("diverse", "Không có tổ hợp cây khác họ đủ điều kiện.")
 
     ranked = [o for o in options[1:]]
     sup = [q for q in prios if q in SUPPORTED_PRIORITIES]
@@ -276,4 +280,10 @@ def generate(cur_code: str, crops: dict[str, dict], suit: dict[str, int | None],
     base["options"] = [options[0]] + ranked
     base["ranked_by"] = [{"priority": q, "meaning": SUPPORTED_PRIORITIES[q]} for q in sup]
     base["note"] = "Phương án đầu tiên luôn là hiện tại; các phương án còn lại xếp theo ưu tiên đã chọn."
+    base["principle"] = (
+        "Cây hiện tại là cây chủ lực: khi có từ 2 vụ trở lên, mọi phương án giữ lại ít nhất 1 vụ cây hiện tại "
+        "(hạ tầng, máy móc và kinh nghiệm canh tác có sẵn) và chỉ thay các vụ còn lại."
+        if n >= 2 else
+        "Chỉ có 1 vụ trong năm với cây này: phương án thay thế là cây của năm kế tiếp, không thể giữ cây hiện tại "
+        "trong cùng năm.")
     return base

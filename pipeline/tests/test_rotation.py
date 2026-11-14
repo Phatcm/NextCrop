@@ -184,3 +184,26 @@ def test_assumptions_are_part_of_every_result():
     res = ro.generate("RCW", CROPS, AN_GIANG)
     assert "chưa được xếp lịch" in res["assumptions"]["season_order"]
     assert res["options"][1]["evidence_source"].startswith("FAO GAEZ v5")
+
+
+def test_main_crop_stays_in_at_least_one_season_whenever_there_are_two_or_more():
+    for kwargs in ({}, {"gap_rice": 30}, {"seasons": 2}, {"gap_other": 40}):
+        res = ro.generate("RCW", CROPS, AN_GIANG, priorities=["nitrogen", "yield"], **kwargs)
+        assert res["seasons"] >= 2
+        assert all("RCW" in o["sequence"] for o in res["options"]), (kwargs, [o["sequence"] for o in res["options"]])
+        assert "ít nhất 1 vụ cây hiện tại" in res["principle"]
+
+
+def test_with_two_seasons_diverse_is_dropped_as_a_twin_not_replaced_by_a_full_change():
+    res = ro.generate("RCW", CROPS, AN_GIANG, gap_rice=30)                      # 2 seasons
+    assert res["seasons"] == 2
+    assert ids(res) == ["keep", "legume", "other_family"] or set(ids(res)) == {"keep", "legume", "other_family"}
+    assert seq(res, "legume") == ["RCW", "COW"]
+    skipped = next(s for s in res["skipped"] if s["id"] == "diverse")
+    assert "Trùng với phương án" in skipped["reason"] and "giữ 1 vụ cây hiện tại" in skipped["reason"]
+    assert len(res["options"]) >= 3                                             # the challenge still gets >= 3
+
+
+def test_single_season_crop_says_alternatives_are_next_year_crops():
+    res = ro.generate("CSV", CROPS, {"CSV": 7705, "SOY": 6277, "SPO": 7273, "GRD": 7182})
+    assert res["seasons"] == 1 and "năm kế tiếp" in res["principle"]

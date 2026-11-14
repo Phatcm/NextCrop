@@ -23,7 +23,9 @@ Cả ba nằm trong khoảng 0–60 ngày (hai khoảng nghỉ) và 0–10000 (c
 | `keep` | Giữ cây hiện tại ở mọi vụ (luôn đứng đầu danh sách) |
 | `legume` | Thay 1 vụ bằng cây họ đậu có điểm GAEZ cao nhất vừa năm (bỏ qua nếu cây hiện tại đã là họ đậu) |
 | `other_family` | Thay 1 vụ bằng cây khác họ, không phải họ đậu, điểm GAEZ cao nhất vừa năm |
-| `diverse` | Thay n-1 vụ (n nếu chỉ 2 vụ): mọi cây khác họ nhau, có cây họ đậu nếu có thể, điểm GAEZ tốt nhất |
+| `diverse` | Thay n-1 vụ: mọi cây khác họ nhau, có cây họ đậu nếu có thể, điểm GAEZ tốt nhất. Với chỉ 2 vụ thì trùng với hai mẫu trên nên bị bỏ và ghi lý do |
+
+**Nguyên tắc cây chủ lực:** cây hiện tại là cây chủ lực (hạ tầng thủy lợi, máy móc, kinh nghiệm canh tác có sẵn). Khi có từ 2 vụ trở lên, **mọi phương án giữ lại ít nhất 1 vụ cây hiện tại** và chỉ thay các vụ còn lại; không phương án nào đổi 100% cả năm. Kết quả ghi nguyên tắc này trong trường `principle`. Chỉ có 1 vụ trong năm (sắn, mía…) thì phương án thay thế là cây của năm kế tiếp.
 
 Mẫu nào không có cây thỏa điều kiện thì không xuất hiện và được ghi trong `skipped` kèm lý do. Đề thi cần ít nhất 3 phương án gồm hiện tại.
 
