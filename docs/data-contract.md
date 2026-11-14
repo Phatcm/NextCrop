@@ -31,7 +31,7 @@ Nguồn thật là [pipeline/db/migrations/001_init.sql](../pipeline/db/migratio
 | `vn_grid_monthly` | `lat, lon, param, yyyymm` | lưới khí hậu cả nước (cho bản đồ) |
 | `pipeline_run` | `run_id` | lần nạp nào đang nằm trong DB |
 
-View cho app: `v_region_overview` (một dòng mỗi vùng kèm số liệu đủ/thiếu), `v_crop_ranking` (xếp hạng cây theo vùng và mức đầu vào).
+View cho app: `v_region_overview` (một dòng mỗi vùng kèm số liệu đủ/thiếu), `v_crop_ranking` (xếp hạng cây theo vùng và mức đầu vào). Từ migration `010` view có thêm `life_cycle` (annual/perennial), `gaez_group`, `water_regime` (wetland/upland) và **`rank_annual`**: hạng riêng chỉ trong số cây một năm, để trống với cây lâu năm. `rank` vẫn xếp cả 24 cây nên **không dùng cho luân canh**: dừa, cà phê, cọ dầu có thể đứng đầu. Với luân canh, app lọc `rank_annual IS NOT NULL` (hoặc `life_cycle = 'annual'`) và xếp theo `rank_annual`. Cây hòa chỉ số thì chia chung hạng.
 
 ## Quy ước app phải tuân theo
 - Ô thiếu dữ liệu là `NULL`, **không bao giờ là 0**. NDVI có `source = 'interpolated'` là giá trị nội suy, phải hiển thị khác với giá trị đo.

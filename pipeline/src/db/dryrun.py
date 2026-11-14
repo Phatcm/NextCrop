@@ -122,9 +122,12 @@ def _strip_regex_checks(part: str) -> str:
             return part.strip()
 
 
+_VIEW_RE = re.compile(r"CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(\w+)", re.I)
+
+
 def translate(statements: list[str], tables: list[str]) -> tuple[list[str], list[str]]:
     """(tables+indexes, views) in SQLite dialect, restricted to `tables`."""
-    ddl, views = [], []
+    ddl, views, by_name = [], [], {}
     for s in fold_alters(statements):
         tp = _table_parts(s)
         if tp:
@@ -147,8 +150,11 @@ def translate(statements: list[str], tables: list[str]) -> tuple[list[str], list
             m = re.search(r"\bON\s+(\w+)", s, re.I)
             if m and m.group(1) in tables:
                 ddl.append(s)
-        elif s.upper().startswith("CREATE VIEW"):
-            views.append(s)
+        else:
+            m = _VIEW_RE.match(s)
+            if m:                      # CREATE OR REPLACE VIEW replaces the earlier definition of the same view
+                by_name[m.group(1)] = _VIEW_RE.sub(r"CREATE VIEW \g<1>", s, count=1)
+    views.extend(by_name.values())
     return ddl, views
 
 

@@ -46,7 +46,7 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 | DATA-12 | Thấp | Độ phủ thời gian: không có 2026, mốc NDVI trước 2015 | Phát |
 | DATA-13 | Thấp | Đơn vị và ngày tạo chưa có trong Postgres | Phát |
 | DATA-14 | Trung bình | Điểm ngoài Việt Nam (Lào, Campuchia, Trung Quốc) vẫn nhận phương án | Hùng (app) + Phát |
-| DATA-15 | Thấp (enhancement) | Gợi ý theo nhóm cây: tách luân canh (cây một năm) khỏi chuyển đổi (cây lâu năm) | Phát |
+| DATA-15 | Thấp (enhancement), **view đã xong** | Gợi ý theo nhóm cây: tách luân canh (cây một năm) khỏi chuyển đổi (cây lâu năm). View `v_crop_ranking` đã có `rank_annual` (migration `010`); còn tầng chuyển đổi và lọc nhóm | Phát |
 | OPS-01..10 | xem mục 4 | | |
 
 ## 3. Vấn đề dữ liệu
@@ -174,7 +174,8 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - **Vấn đề:** view `v_crop_ranking` xếp hạng cả 24 cây, kể cả cây lâu năm. Trên Neon (14/11), An Giang (vùng lúa) có **dừa hạng 2**, Sóc Trăng có **cọ dầu hạng 1**. Hiển thị bảng này dưới nhãn "cây nên trồng" cho đất lúa là vô lý: điểm GAEZ chỉ cho biết đất hợp cây nào, không phân biệt luân canh với chuyển hẳn sang cây lâu năm. Bộ sinh phương án đã loại cây lâu năm nên không bị lỗi này, nhưng chưa có ràng buộc theo nhóm (ví dụ vẫn có thể gợi ý cà chua sau lúa, kèm cảnh báo thoát nước).
 - **Quyết định 14/11:** để backlog, vì trước mắt cần sản phẩm (app chưa có mã).
 - **Hướng xử lý:** (1) migration tạo lại `v_crop_ranking` thêm `life_cycle`, `gaez_group`, `water_regime` (đã có trong `dim_crop`) và hạng riêng trong số cây một năm `rank_annual`; app mặc định chỉ hiện cây một năm. (2) Tầng "chuyển đổi cơ cấu" cho cây lâu năm, tách riêng và ghi rõ khác bản chất (cần đầu tư, nhiều năm mới có thu, thường phải lên liếp). (3) Lọc theo nhóm GAEZ trong bộ sinh phương án (ví dụ ruộng lúa chỉ nhận nhóm đậu, cây dầu, rau, ngũ cốc), có thể dùng `crop_profile` của DATA-01.
-- **Cho đến khi làm:** app không nên hiện `v_crop_ranking` thô như danh sách gợi ý; nếu hiện thì lọc `life_cycle = 'annual'`.
+- **Đã làm (14/11, migration `010`):** `v_crop_ranking` thêm `life_cycle`, `gaez_group`, `water_regime` và `rank_annual` (hạng riêng cho cây một năm, để trống với cây lâu năm); cột cũ giữ nguyên thứ tự nên truy vấn hiện có vẫn chạy. Ví dụ An Giang (nước trời, đầu vào cao): `rank` là lúa cạn, dừa, lúa nước, cà phê, sắn; `rank_annual` là lúa cạn 1, lúa nước 2, sắn 3. Bộ chạy thử `--dry-run` hiểu thêm `CREATE OR REPLACE VIEW` (trước đó bỏ qua). Còn lại: tầng "chuyển đổi cơ cấu" cho cây lâu năm và lọc theo nhóm GAEZ trong bộ sinh phương án (hướng xử lý 2 và 3).
+- **Cho app:** không hiện `rank` thô như danh sách gợi ý luân canh; lọc `rank_annual IS NOT NULL` và xếp theo `rank_annual`. Ở vùng có chỉ số chạm trần (Ninh Thuận, Thái Bình) nhiều cây hòa hạng: hiện cả nhóm hòa.
 - **Xong khi:** app không còn gợi ý cây lâu năm trong luồng luân canh, có test.
 
 ### DATA-13 · Thấp · Đơn vị và ngày tạo chưa có trong Postgres
