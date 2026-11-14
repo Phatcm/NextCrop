@@ -83,7 +83,7 @@ def scalar(conn, sql: str):
     return conn.run(sql)[0][0]
 
 
-def validate(conn, counts: dict, catalog: dict, start: int, end: int) -> Report:
+def validate(conn, counts: dict, catalog: dict, start: int, end: int, cfg: dict | None = None) -> Report:
     rep = Report()
     for t, n in counts.items():
         exp = catalog["datasets"].get(t, {}).get("rows")
@@ -96,8 +96,9 @@ def validate(conn, counts: dict, catalog: dict, start: int, end: int) -> Report:
     rep.check("power_daily: no NULL t2m, and NULL rain only where the rain QA rule removed the day (never 0)",
               scalar(conn, "SELECT count(*) FROM power_daily WHERE t2m IS NULL "
                            "OR (prectotcorr IS NULL AND prectotcorr_qa IS NULL)") == 0)
-    rep.check("power_daily: no rain above the QA limit survives (250 mm/day)",
-              scalar(conn, "SELECT count(*) FROM power_daily WHERE prectotcorr > 250") == 0)
+    limit = float(((cfg or {}).get("power", {}).get("rain_qa") or {}).get("max_daily_mm", 150))
+    rep.check(f"power_daily: no rain above the QA limit survives ({limit:g} mm/day)",
+              scalar(conn, f"SELECT count(*) FROM power_daily WHERE prectotcorr > {limit}") == 0)
     rep.check("power_daily: t2m in [-10, 45] C", scalar(conn, "SELECT count(*) FROM power_daily WHERE t2m NOT BETWEEN -10 AND 45") == 0)
     rep.check("every region has NDVI from its primary source",
               scalar(conn, "SELECT count(*) FROM dim_region r WHERE r.ndvi_primary IS NOT NULL AND NOT EXISTS "
@@ -226,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
             for t, n in counts.items():
                 print(f"  {t:<22}{n:>10,}")
             print("\nChecks")
-            rep = validate(conn, counts, catalog, cfg["start_year"], cfg["end_year"])
+            rep = validate(conn, counts, catalog, cfg["start_year"], cfg["end_year"], cfg)
             if rep.failed:
                 conn.run("ROLLBACK")
                 print(f"\n{rep.failed}/{rep.total} checks FAILED: rolled back, database unchanged.")

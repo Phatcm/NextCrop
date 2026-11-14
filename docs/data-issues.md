@@ -10,12 +10,12 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - R2 `field-shift-nasa`, lần chạy `20261114T030142Z`: 633 object, sha256 khớp manifest, `--verify` 0 lỗi, chạy lại không đẩy trùng.
 - Migration Postgres `001_init.sql` + `load_postgres.py`; `--dry-run` qua sạch 402.709 dòng; CI xanh (60 test, test Postgres 17 thật qua).
 
-- **Nạp Postgres thật (OPS-01): đã xong.** Neon (PostgreSQL 18.7): 402.709 dòng, 19/19 kiểm tra qua, chạy lại lần hai vẫn qua; app đọc được qua cả chuỗi pooled và direct.
+- **Nạp Postgres thật (OPS-01): đã xong.** Neon (PostgreSQL 18.7): 402.709 dòng, 19/19 kiểm tra qua (lần đầu); **14/11 lần nạp thứ hai: 625.429 dòng, 23/23 kiểm tra qua, run `20261114T041950Z`, migration 002 đã áp**, chạy lại lần hai vẫn qua; app đọc được qua cả chuỗi pooled và direct.
 
 **Chưa xong**: bảng cây trồng (DATA-01) và các vấn đề độ chính xác bên dưới.
 
 **Vị trí**
-- Mã: repo `Phatcm/field-shift`, nhánh `feat/pipeline-etl-r2-postgres` (chưa mở PR, chưa vào `main`).
+- Mã: repo `Phatcm/field-shift`; PR #1 đã vào `main`. Nhánh `feat/gaez-national-and-rain-qa` (DATA-04/05) chưa mở PR.
 - Dữ liệu sinh ra: `pipeline/data/` trên máy chạy ETL, **không commit**; dựng lại được từ R2 hoặc từ bronze bằng `python run_etl.py --offline`.
 - Database: dự án Neon `tiny-flower-76765987` (tổ chức `org-withered-wave-01543450`, nhánh `production`), schema `field_shift`, đang chứa lần chạy R2 `20261114T030142Z` (xem bảng `pipeline_run`). `DATABASE_URL` (trực tiếp) dùng cho pipeline, `DATABASE_URL_POOLED` cho app. Phát cần được thêm vào tổ chức Neon và tự lấy chuỗi kết nối trong Neon Console.
 - **Bí mật nằm trong `pipeline/.env` chỉ trên máy hiện tại.** Phát cần được cấp riêng (không qua repo hay chat): `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `EARTHDATA_USERNAME`, `EARTHDATA_PASSWORD`, `DATABASE_URL`.
@@ -74,9 +74,8 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - **Còn lại của DATA-04:** NDVI, SMAP, lớp phủ đất vẫn chỉ có 6 vùng; khí hậu POWER đã có cả nước.
 
 ### DATA-05 · ĐÃ XỬ LÝ (14/11/2026) · Mưa phi lý lan sang nhiều bảng
-- **Đã làm:** `src/transformers/rain_qa.py`, cấu hình `power.rain_qa` (`max_daily_mm: 250`, `min_valid_frac: 0.8`). Ngày vượt ngưỡng → `prectotcorr = NULL` (không phải 0) kèm lý do ở cột mới `prectotcorr_qa`; tháng và năm chứa ngày đó được tính lại từ các ngày còn lại (mm/ngày), tháng/năm khác giữ nguyên số của POWER. Gold có `climate.rain_qa.removed_days` và một dòng trong `caveats`. Loader Postgres kiểm tra: rỗng mưa chỉ khi có cờ, không còn ngày > 250 mm.
-- **[ĐÃ XÁC NHẬN] trên dữ liệu POWER thật 2015–2025:** chỉ loại đúng 1 ngày, An Giang 2020-06-14 (691,4 mm). Tháng 6/2020 từ 1.114 mm xuống 437 mm; tổng năm 2020 từ 3.041 mm xuống khoảng 2.350 mm. Năm khác và vùng khác không đổi.
-- **Đối chiếu độc lập (ERA5 qua Open-Meteo, chỉ để kiểm tra, không đưa vào sản phẩm)** cho thấy cả 4 ngày đáng ngờ trong tài liệu đều là đỉnh nhiễu của POWER, không phải bão thật:
+- **Đã làm:** `src/transformers/rain_qa.py`, cấu hình `power.rain_qa` (`max_daily_mm: 150`, `min_valid_frac: 0.8`). Ngày vượt ngưỡng → `prectotcorr = NULL` (không phải 0) kèm lý do ở cột mới `prectotcorr_qa`; tháng và năm chứa ngày đó được tính lại từ các ngày còn lại (mm/ngày), tháng/năm khác giữ nguyên số của POWER. Gold có `climate.rain_qa.removed_days` và một dòng trong `caveats`. Loader Postgres kiểm tra: rỗng mưa chỉ khi có cờ, không còn ngày > 150 mm.
+- **[ĐÃ XÁC NHẬN] trên dữ liệu POWER thật 2015–2025, ngưỡng 150 mm (đã chốt 14/11):** loại đúng 5 ngày, đều bị ERA5 (Open-Meteo, chỉ để kiểm tra, không đưa vào sản phẩm) phủ nhận:
 
   | Vùng | Ngày | POWER | ERA5 |
   |---|---|---|---|
@@ -84,8 +83,9 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
   | Sơn La | 2022-02-04 | 211 mm | 0 mm |
   | Thái Bình | 2020-10-18 | 205 mm | 17 mm |
   | Đắk Lắk | 2019-08-07 | 200 mm | 29 mm |
+  | Thái Bình | 2024-09-07 | 155 mm | **chưa đối chiếu** |
 
-  Tháng 6/2020 An Giang theo ERA5 là 291 mm (sau QA còn 437 mm; vẫn cao hơn nhưng không còn phi lý). Ngưỡng 250 chỉ bắt được ngày đầu tiên. **Cần chốt:** hạ `max_daily_mm` xuống 150 sẽ bắt cả 4 ngày (kèm 1 ngày Thái Bình 2024-09-07 = 155 mm chưa kiểm). Ngưỡng cố định có rủi ro cắt mưa thật ở miền Trung (lũ lịch sử tháng 10/2020), nhưng 6 vùng demo không có vùng nào ở miền Trung.
+  Ngày 2024-09-07 (155 mm) bị loại chỉ vì vượt ngưỡng; cần kiểm lại (có thể là mưa bão Yagi thật, 7/9/2024). Tháng 6/2020 An Giang từ 1.114 mm xuống 437 mm (ERA5: 291 mm); tổng năm 2020 từ 3.041 mm xuống khoảng 2.350 mm. Ngưỡng 250 mm ban đầu chỉ bắt được ngày An Giang. Ngưỡng cố định có rủi ro cắt mưa thật (miền Trung tháng 10/2020), nhưng 6 vùng demo không ở miền Trung.
 - **Chưa xử lý:** lưới khí hậu cả nước (`vn_grid_monthly`) là dữ liệu tháng nên không áp được quy tắc theo ngày; ô lưới chứa An Giang vẫn mang số tháng 6/2020 cao bất thường.
 
 ### DATA-06 · Cao · Ninh Thuận 1.961 mm/năm, nhiều khả năng quá cao
@@ -154,12 +154,11 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - `R2_PUBLIC_BASE_URL` đang trống: bucket chưa công khai. App dùng Postgres nên chưa cần, nhưng nếu muốn xuất JSON tĩnh (gold) thì phải quyết định mở đọc công khai.
 
 ## 5. Quyết định cần chốt
-1. Ngưỡng mưa ngày: giữ 250 mm hay hạ xuống 150 mm (xem DATA-05).
-2. Danh sách vùng demo cuối (giữ hay bỏ Sơn La, Đắk Lắk; dùng Ninh Thuận làm vùng khô thế nào).
-3. Ai định nghĩa phương án luân canh và bằng cách nào (DATA-02).
-4. Có thêm GPM / SMAP L4 / Aqua không, hay chỉ ghi cảnh báo.
-5. Nhà cung cấp và cách app truy cập Postgres.
-6. Thời điểm mở PR và merge; bucket có công khai không.
+1. Danh sách vùng demo cuối (giữ hay bỏ Sơn La, Đắk Lắk; dùng Ninh Thuận làm vùng khô thế nào).
+2. Ai định nghĩa phương án luân canh và bằng cách nào (DATA-02).
+3. Có thêm GPM / SMAP L4 / Aqua không, hay chỉ ghi cảnh báo.
+4. Nhà cung cấp và cách app truy cập Postgres.
+5. Thời điểm mở PR và merge; bucket có công khai không.
 
 ## 6. Cách chạy và tái hiện
 ```powershell

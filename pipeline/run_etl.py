@@ -101,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
                                                                bronze / "power", args.offline)
                 qa = cfg["power"].get("rain_qa") or {}
                 power_by[region.id], removed = apply_rain_qa(
-                    power_by[region.id], qa.get("max_daily_mm", 250.0), qa.get("min_valid_frac", 0.8))
+                    power_by[region.id], qa.get("max_daily_mm", 150.0), qa.get("min_valid_frac", 0.8))
                 rain_removed[region.id] = removed
                 p = power_by[region.id]
                 print(f"  [power] {len(p['daily']['rows'])} days, {len(p['monthly']['rows'])} months"
