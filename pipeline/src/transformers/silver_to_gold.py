@@ -11,6 +11,7 @@ from src.models import NdviPoint, Region
 from src.transformers.climate import annual_anomalies, grid_cells, monthly_normals, ndvi_profile
 
 SCHEMA_VERSION = "0.3"   # 0.3: + suitability (GAEZ); silver ndvi tables unified with a source_key column
+# additive changes since 0.3 (no bump): climate.rain_qa in gold, prectotcorr_qa in silver power_daily
 
 
 def _now() -> str:
@@ -56,7 +57,8 @@ def landcover_check(lc: dict | None, min_cropland: float = 0.5) -> dict | None:
 
 def build_region_gold(region: Region, start_year: int, end_year: int, *, power: dict | None,
                       ndvi: dict[str, dict], smap: dict | None, landcover: dict | None,
-                      elevation: dict | None, power_cfg: dict, suitability: dict | None = None) -> dict:
+                      elevation: dict | None, power_cfg: dict, suitability: dict | None = None,
+                      rain_removed: list[dict] | None = None) -> dict:
     """ndvi = {source_key: {"description", "qa", "series": [NdviPoint]}}; suitability = gaez.gold_block()."""
     lat, lon = region.center
     lc_check = landcover_check(landcover)
@@ -108,6 +110,16 @@ def build_region_gold(region: Region, start_year: int, end_year: int, *, power: 
             "annual_by_year": annual_anomalies(power["monthly"]["annual"], params),
             "missing_days": {p: sum(r[p] is None for r in power["daily"]["rows"]) for p in params},
         }
+        if rain_removed is not None:
+            qa = power_cfg.get("rain_qa") or {}
+            gold["climate"]["rain_qa"] = {
+                "rule": f"PRECTOTCORR ngày > {qa.get('max_daily_mm', 250.0):g} mm bị đặt NULL; tháng/năm có ngày đó "
+                        "được tính lại từ các ngày còn lại (mm/ngày)",
+                "removed_days": rain_removed}
+            if rain_removed:
+                gold["metadata"]["caveats"].append(
+                    f"Mưa: đã loại {len(rain_removed)} ngày POWER có giá trị phi lý (" + ", ".join(
+                        f"{d['date']} = {d['value_mm']:.0f} mm" for d in rain_removed) + ").")
     if ndvi:
         gold["ndvi"] = {"primary": primary, "sources": {}}
         for key, src in ndvi.items():

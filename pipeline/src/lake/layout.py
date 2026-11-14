@@ -29,6 +29,7 @@ DATASET_KEYS: dict[str, list[str]] = {
     "ndvi_series": ["region_id", "source_key", "date"],
     "ndvi_raw": ["region_id", "source_key", "date"],
     "gaez_suitability": ["region_id", "crop_code", "input_mode", "period", "ssp"],
+    "gaez_grid": ["lat", "lon", "crop_code"],
     "smap_daily": ["region_id", "date"],
     "gfsad_points": ["point"],
     "landcover_by_year": ["region_id", "year"],

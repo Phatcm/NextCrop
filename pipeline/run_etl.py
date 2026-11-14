@@ -19,11 +19,12 @@ from pathlib import Path
 
 import yaml
 
-from src.extractors import appeears_client, gaez, gfsad, gibs_ndvi, power_client
+from src.extractors import appeears_client, gaez, gaez_grid, gfsad, gibs_ndvi, power_client
 from src.http_client import HttpError
 from src.models import Region
 from src.transformers import appeears_transform as at
 from src.transformers.ndvi_qa import build_series
+from src.transformers.rain_qa import apply_rain_qa
 from src.transformers.silver_to_gold import (build_region_gold, write_csv, write_dim_crop, write_dim_region,
                                              write_grid, write_index, write_region)
 
@@ -42,6 +43,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--skip-appeears", action="store_true")
     ap.add_argument("--skip-gfsad", action="store_true")
     ap.add_argument("--skip-gaez", action="store_true", help="skip FAO GAEZ crop suitability")
+    ap.add_argument("--skip-gaez-grid", action="store_true", help="skip the Vietnam-wide GAEZ grid (slow: ~45 min)")
+    ap.add_argument("--gaez-local-dir", help="folder with already downloaded GAEZ GeoTIFFs (same file names) for the grid")
     ap.add_argument("--no-wait", action="store_true", help="don't wait for AppEEARS tasks to finish")
     ap.add_argument("--offline", action="store_true", help="use cached downloads only")
     args = ap.parse_args(argv)
@@ -87,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # 3) per-region POWER + GIBS
     power_by: dict[str, dict] = {}
+    rain_removed: dict[str, list[dict]] = {}
     gibs_by: dict[str, list] = {}
     for region in regions:
         print(f"== {region.id} ({region.name})")
@@ -95,8 +99,14 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 power_by[region.id] = power_client.fetch_power(cfg["power"], lat, lon, start, end,
                                                                bronze / "power", args.offline)
+                qa = cfg["power"].get("rain_qa") or {}
+                power_by[region.id], removed = apply_rain_qa(
+                    power_by[region.id], qa.get("max_daily_mm", 250.0), qa.get("min_valid_frac", 0.8))
+                rain_removed[region.id] = removed
                 p = power_by[region.id]
-                print(f"  [power] {len(p['daily']['rows'])} days, {len(p['monthly']['rows'])} months")
+                print(f"  [power] {len(p['daily']['rows'])} days, {len(p['monthly']['rows'])} months"
+                      + (f"; rain QA removed {len(removed)} day(s): "
+                         + ", ".join(f"{d['date']}={d['value_mm']:.0f}mm" for d in removed) if removed else ""))
             except HttpError as e:
                 problems.append(f"power {region.id}: {e}")
                 print(f"  [power] FAILED: {e}")
@@ -177,6 +187,22 @@ def main(argv: list[str] | None = None) -> int:
                 problems.append(f"gaez {region.id}: only {len(rows)}/{expected} values")
         write_dim_crop(silver, gaez.crop_dim_rows(gcfg))
 
+    # 4d) FAO GAEZ on a nationwide grid (DATA-04): any clicked point gets a suitability value
+    if not args.skip_gaez_grid and "gaez" in cfg and "gaez_grid" in cfg:
+        print("== FAO GAEZ v5 nationwide grid")
+        grids, gproblems = gaez_grid.fetch_grids(
+            cfg["gaez"], cfg["gaez_grid"], bronze / "gaez", offline=args.offline,
+            workers=cfg["gaez"].get("workers", 4),
+            local_dir=Path(args.gaez_local_dir) if args.gaez_local_dir else None)
+        problems += [f"gaez grid: {p}" for p in gproblems]
+        rows = gaez_grid.build_rows(cfg["gaez"], grids)
+        if rows and not gproblems:
+            write_csv(silver / "gaez_grid.csv", rows)
+            print(f"  [gaez-grid] {(silver / 'gaez_grid.csv').relative_to(ROOT)}: {len(rows):,} rows "
+                  f"({len({(r['lat'], r['lon']) for r in rows}):,} cells)")
+        elif rows:
+            print("  [gaez-grid] incomplete: silver/gaez_grid.csv NOT written (would silently miss crop x mode values)")
+
     modis = at.modis_ndvi_observations(ae_rows["ndvi"], cfg["appeears"]["ndvi_qa"]["accept_reliability"],
                                        allowed) if "ndvi" in ae_rows else {}
     smap = at.smap_daily(ae_rows["smap"]) if "smap" in ae_rows else {}
@@ -211,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         g = build_region_gold(region, start, end, power=power_by.get(region.id), ndvi=ndvi, smap=sm,
                               landcover=lc.get(region.id), elevation=dem.get(region.id),
-                              power_cfg=cfg["power"],
+                              power_cfg=cfg["power"], rain_removed=rain_removed.get(region.id),
                               suitability=gaez.gold_block(cfg["gaez"], gaez_rows.get(region.id, [])) if "gaez" in cfg else None)
         if region.id in gf_stats:
             s = gf_stats[region.id]

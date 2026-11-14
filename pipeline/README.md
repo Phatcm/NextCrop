@@ -52,6 +52,8 @@ python run_etl.py                       # tất cả nguồn (AppEEARS có thể
 python run_etl.py --no-wait             # chỉ gửi task AppEEARS, chạy lại sau để tải về
 python run_etl.py --offline             # dựng lại silver/gold từ cache bronze
 python run_etl.py --regions an_giang_rice --skip-gibs --skip-grid
+python run_etl.py --gaez-local-dir D:\path	o\gaez_tifs   # lưới GAEZ cả nước từ file tif đã tải (~vài giây thay vì ~45 phút)
+python run_etl.py --skip-gaez-grid                          # bỏ qua lưới GAEZ cả nước
 python upload_r2.py --dry-run           # xem sẽ đẩy gì
 python upload_r2.py --init --prune      # đẩy lên R2 (lần đầu có --init; --prune dọn object cũ)
 python upload_r2.py --verify            # đối chiếu bucket với manifest

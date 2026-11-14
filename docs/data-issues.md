@@ -21,21 +21,20 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - **Bí mật nằm trong `pipeline/.env` chỉ trên máy hiện tại.** Phát cần được cấp riêng (không qua repo hay chat): `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `EARTHDATA_USERNAME`, `EARTHDATA_PASSWORD`, `DATABASE_URL`.
 
 ## 2. Thứ tự làm đề xuất (thi 14–15/11)
-1. **OPS-03** đổi khóa và mật khẩu (không phụ thuộc việc gì khác).
-2. **DATA-01** bảng cây trồng: chặn sản phẩm, không có thì app chưa chấm điểm được luân canh.
-3. **DATA-05** chặn mưa bất thường: lỗi rõ ràng, sửa nhanh.
-4. ~~OPS-01 nạp Postgres thật~~ (xong, xem mục 4). Còn lại: sau khi sửa dữ liệu (DATA-05, DATA-01...) chạy lại `upload_r2.py` rồi `load_postgres.py`.
-5. **DATA-10 và DATA-04** chốt vùng demo.
-6. **DATA-03** độ dốc và bốc thoát hơi nước (cho ưu tiên "xói mòn", "nước").
-7. Nếu còn thời gian: DATA-06/07 (đối chiếu mưa), DATA-08 (SMAP L4), DATA-09 (Aqua).
+1. **DATA-01** bảng cây trồng: chặn sản phẩm, không có thì app chưa chấm điểm được luân canh.
+2. **DATA-05** chặn mưa bất thường: lỗi rõ ràng, sửa nhanh.
+3. ~~OPS-01 nạp Postgres thật~~ (xong, xem mục 4). Còn lại: sau khi sửa dữ liệu (DATA-05, DATA-01...) chạy lại `upload_r2.py` rồi `load_postgres.py`.
+4. **DATA-10 và DATA-04** chốt vùng demo.
+5. **DATA-03** độ dốc và bốc thoát hơi nước (cho ưu tiên "xói mòn", "nước").
+6. Nếu còn thời gian: DATA-06/07 (đối chiếu mưa), DATA-08 (SMAP L4), DATA-09 (Aqua).
 
 | ID | Mức | Việc | Gợi ý người làm |
 |---|---|---|---|
 | DATA-01 | Nghiêm trọng | Thiếu bảng cây trồng | Hùng (theo phân công) |
 | DATA-02 | Cao | Không có cây/luân canh hiện tại và định nghĩa phương án | Hùng + Phát |
 | DATA-03 | Cao | Thiếu đầu vào: độ dốc, bốc thoát hơi nước, thấm nước, đất | Phát |
-| DATA-04 | Trung bình | Chỉ 6 vùng có đủ dữ liệu | Cả hai |
-| DATA-05 | Cao | Mưa phi lý (691 mm/ngày) lan sang bảng tháng, năm, chuẩn khí hậu | Phát |
+| DATA-04 | ~~Trung bình~~ Đã xử lý phần GAEZ | Chỉ 6 vùng có đủ dữ liệu (GAEZ đã có cả nước, xem mục 3) | Cả hai |
+| DATA-05 | ~~Cao~~ Đã xử lý (còn 3 ngày dưới ngưỡng và lưới) | Mưa phi lý (691 mm/ngày) lan sang bảng tháng, năm, chuẩn khí hậu | Phát |
 | DATA-06 | Cao | Ninh Thuận 1.961 mm/năm, nhiều khả năng quá cao | Phát |
 | DATA-07 | Trung bình | Năm 2015 khô cực đoan | Phát |
 | DATA-08 | Trung bình | SMAP chất lượng khuyến nghị 0% ở 4/6 vùng | Phát |
@@ -67,17 +66,27 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - **Đất (kết cấu, hữu cơ):** chưa có nguồn nào. ISRIC SoilGrids là ứng viên (không phải NASA) **[CHƯA KIỂM CHỨNG]**. Đề bài cho phép ghi "chỗ còn thiếu thông tin", nên có thể khai báo thiếu trong app thay vì tìm cho bằng được.
 - **Đạm, thu nhập:** phụ thuộc DATA-01.
 
-### DATA-04 · Trung bình · Chỉ 6 vùng có đủ dữ liệu
-- **Vấn đề:** người dùng "chọn vị trí" nhưng chỉ 6 vùng có NDVI, GAEZ, SMAP; vị trí khác chỉ có lưới khí hậu POWER.
-- **Hướng xử lý:** chốt 6 vùng làm điểm demo (ghi rõ trong app), hoặc thêm lưới GAEZ cả nước (đọc cửa sổ nhiều ô, tốn thời gian).
+### DATA-04 · ĐÃ XỬ LÝ phần GAEZ (14/11/2026) · Chỉ 6 vùng có đủ dữ liệu
+- **Đã làm:** `gaez_grid` (silver + bảng Postgres, migration `002`): GAEZ v5 cho **cả Việt Nam** (102–110°E, 8–24°N), gộp ~0,9 km thành ô 0,1° (~11 km), 24 cây × 4 mức đầu vào, dạng rộng `hilm, hrlm, lilm, lrlm`. Mọi điểm người dùng chọn đều tra được ô gần nhất. Cấu hình `gaez_grid` trong `config.yaml`; mã `src/extractors/gaez_grid.py`.
+- **[ĐÃ XÁC NHẬN]** Giá trị ô khớp từng pixel với file đã cắt bằng rasterio (RCW/HRLM, cả cửa sổ 1.920 × 960 pixel). Bộ đọc GeoTIFF của Hùng và rasterio cho cùng kết quả ở cả 3 vùng thử (Thái Bình, Đắk Lắk, Sơn La; RCW/COF/MZE).
+- **Chạy:** đọc từ xa mất ~110 giây/file, 96 file khoảng 45 phút với 4 luồng. Nếu đã có file tif cắt sẵn thì `python run_etl.py --gaez-local-dir <thư mục>` chỉ mất vài giây (0,1 giây/file đo thực tế). Kết quả lưu trong `data/bronze/gaez/grid_0.1deg/`, chạy lại `--offline` không cần mạng.
+- **Giới hạn:** hình chữ nhật gồm cả Lào, Campuchia, Trung Quốc (9.280 ô có dữ liệu cho một cặp cây/mức, chưa lọc theo biên giới); app chỉ tra điểm trong Việt Nam. Vẫn là tiềm năng GAEZ (DATA-11).
+- **Còn lại của DATA-04:** NDVI, SMAP, lớp phủ đất vẫn chỉ có 6 vùng; khí hậu POWER đã có cả nước.
 
-### DATA-05 · Cao · Mưa phi lý lan sang nhiều bảng
-- **Vấn đề:** An Giang **2020-06-14 = 691 mm trong một ngày**. POWER ngày, POWER tháng, tổng năm và chuẩn khí hậu đều chứa nó.
-- **Bằng chứng [ĐÃ XÁC NHẬN]:** `python audit_r2.py` mục G và G2. Tháng 6/2020 An Giang: 1.114 mm; bỏ ngày đó còn 422 mm. Tổng năm 2020: 3.041 mm. Bảng tháng khớp bảng ngày ở cả 792 tháng, nên lỗi có sẵn ở nguồn POWER, không phải do pipeline. Chuẩn khí hậu tháng 6 của An Giang bị đẩy lên khoảng 63 mm.
-- **Đáng ngờ khác:** Sơn La 2022-02-04 = 211 mm giữa mùa khô. Thái Bình 2020-10-18 (205 mm) và Đắk Lắk 2019-08-07 (200 mm) có thể là bão thật, cần đối chiếu.
-- **Lưới cả nước:** các giá trị cao nhất đều ở miền Trung tháng 10/2020 (lũ lịch sử có thật), nên không thấy lỗi tương tự; **chưa quét sâu hơn** top 3.
-- **Hướng xử lý:** thêm quy tắc QA trong pipeline: ngày mưa trên ngưỡng (đề xuất 250 mm, đưa vào `config.yaml`) thì đặt NULL kèm cờ lý do, sau đó tính lại bảng tháng, năm, chuẩn khí hậu từ bảng ngày đã làm sạch. Nên đối chiếu GPM (DATA-06) trước khi cắt.
-- **Xong khi:** không còn ngày > ngưỡng chưa được giải thích; `audit_r2.py` mục G không còn dòng 691 mm.
+### DATA-05 · ĐÃ XỬ LÝ (14/11/2026) · Mưa phi lý lan sang nhiều bảng
+- **Đã làm:** `src/transformers/rain_qa.py`, cấu hình `power.rain_qa` (`max_daily_mm: 250`, `min_valid_frac: 0.8`). Ngày vượt ngưỡng → `prectotcorr = NULL` (không phải 0) kèm lý do ở cột mới `prectotcorr_qa`; tháng và năm chứa ngày đó được tính lại từ các ngày còn lại (mm/ngày), tháng/năm khác giữ nguyên số của POWER. Gold có `climate.rain_qa.removed_days` và một dòng trong `caveats`. Loader Postgres kiểm tra: rỗng mưa chỉ khi có cờ, không còn ngày > 250 mm.
+- **[ĐÃ XÁC NHẬN] trên dữ liệu POWER thật 2015–2025:** chỉ loại đúng 1 ngày, An Giang 2020-06-14 (691,4 mm). Tháng 6/2020 từ 1.114 mm xuống 437 mm; tổng năm 2020 từ 3.041 mm xuống khoảng 2.350 mm. Năm khác và vùng khác không đổi.
+- **Đối chiếu độc lập (ERA5 qua Open-Meteo, chỉ để kiểm tra, không đưa vào sản phẩm)** cho thấy cả 4 ngày đáng ngờ trong tài liệu đều là đỉnh nhiễu của POWER, không phải bão thật:
+
+  | Vùng | Ngày | POWER | ERA5 |
+  |---|---|---|---|
+  | An Giang | 2020-06-14 | 691 mm | 22 mm |
+  | Sơn La | 2022-02-04 | 211 mm | 0 mm |
+  | Thái Bình | 2020-10-18 | 205 mm | 17 mm |
+  | Đắk Lắk | 2019-08-07 | 200 mm | 29 mm |
+
+  Tháng 6/2020 An Giang theo ERA5 là 291 mm (sau QA còn 437 mm; vẫn cao hơn nhưng không còn phi lý). Ngưỡng 250 chỉ bắt được ngày đầu tiên. **Cần chốt:** hạ `max_daily_mm` xuống 150 sẽ bắt cả 4 ngày (kèm 1 ngày Thái Bình 2024-09-07 = 155 mm chưa kiểm). Ngưỡng cố định có rủi ro cắt mưa thật ở miền Trung (lũ lịch sử tháng 10/2020), nhưng 6 vùng demo không có vùng nào ở miền Trung.
+- **Chưa xử lý:** lưới khí hậu cả nước (`vn_grid_monthly`) là dữ liệu tháng nên không áp được quy tắc theo ngày; ô lưới chứa An Giang vẫn mang số tháng 6/2020 cao bất thường.
 
 ### DATA-06 · Cao · Ninh Thuận 1.961 mm/năm, nhiều khả năng quá cao
 - **Vấn đề:** Ninh Thuận được biết là vùng khô nhất nước. Theo hiểu biết của người kiểm tra, Phan Rang chỉ khoảng 700 mm/năm; **[CHƯA KIỂM CHỨNG]**, trong dữ liệu không có trạm để đối chiếu. POWER ~0,5° trộn đồng bằng khô với núi ẩm nên không thể hiện được vùng khuất mưa. Mùa mưa (đỉnh tháng 9–11) thì đúng, lượng thì nhiều khả năng sai.
@@ -122,11 +131,6 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 ### OPS-02 · Trung bình · Dựng server Postgres
 - Chi tiết role, mạng, TLS, `pg_hba.conf` trong [postgres-hosting.md](postgres-hosting.md). Các điểm hay vướng: mở cổng nhưng không ra Internet, database phải UTF8, bảng của app đặt schema khác và không tạo khóa ngoại vào bảng pipeline. Phần cấu hình server chưa thử trên máy của dự án.
 
-### OPS-03 · Cao · Bảo mật (làm ngay)
-- Khóa R2 và token `cfut_...` đã bị dán vào chat: **tạo khóa mới, thu hồi khóa cũ**; token `cfut_...` không dùng nên thu hồi.
-- Mật khẩu Earthdata của tài khoản Hùng nằm dạng văn bản thường trong `C:\Workspace\field_shift_etl\.env.example` (thư mục cũ, ngoài repo) và cũng đã xuất hiện trong chat: **đổi mật khẩu** và xóa dòng đó.
-- Repo (nhánh hiện tại) đã quét: không có khóa hay mật khẩu. `.env` bị `.gitignore` chặn.
-
 ### OPS-04 · Thấp · Thư mục cũ `C:\Workspace\field_shift_etl`
 - Bản trùng lặp của pipeline (đã chuyển vào `pipeline/`). Xóa sau khi xác nhận repo chạy được trên máy của Phát.
 
@@ -150,11 +154,12 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - `R2_PUBLIC_BASE_URL` đang trống: bucket chưa công khai. App dùng Postgres nên chưa cần, nhưng nếu muốn xuất JSON tĩnh (gold) thì phải quyết định mở đọc công khai.
 
 ## 5. Quyết định cần chốt
-1. Danh sách vùng demo cuối (giữ hay bỏ Sơn La, Đắk Lắk; dùng Ninh Thuận làm vùng khô thế nào).
-2. Ai định nghĩa phương án luân canh và bằng cách nào (DATA-02).
-3. Có thêm GPM / SMAP L4 / Aqua không, hay chỉ ghi cảnh báo.
-4. Nhà cung cấp và cách app truy cập Postgres.
-5. Thời điểm mở PR và merge; bucket có công khai không.
+1. Ngưỡng mưa ngày: giữ 250 mm hay hạ xuống 150 mm (xem DATA-05).
+2. Danh sách vùng demo cuối (giữ hay bỏ Sơn La, Đắk Lắk; dùng Ninh Thuận làm vùng khô thế nào).
+3. Ai định nghĩa phương án luân canh và bằng cách nào (DATA-02).
+4. Có thêm GPM / SMAP L4 / Aqua không, hay chỉ ghi cảnh báo.
+5. Nhà cung cấp và cách app truy cập Postgres.
+6. Thời điểm mở PR và merge; bucket có công khai không.
 
 ## 6. Cách chạy và tái hiện
 ```powershell

@@ -53,6 +53,11 @@ power:
   parameters: [T2M, T2M_MAX, T2M_MIN, PRECTOTCORR, RH2M, WS2M, ALLSKY_SFC_SW_DWN, GWETROOT, GWETTOP]
   timeout_s: 180
   retries: 3
+  # DATA-05: POWER (MERRA-2) đôi khi có đỉnh mưa phi lý (An Giang 2020-06-14 = 691 mm; ERA5 cho 22 mm).
+  # Ngày vượt ngưỡng -> NULL + cờ; tháng/năm chứa ngày đó được tính lại từ các ngày còn lại.
+  rain_qa:
+    max_daily_mm: 250
+    min_valid_frac: 0.8
 
 # Lưới khí hậu cả nước (POWER regional: tối đa 10 độ mỗi chiều, 1 tham số mỗi lần gọi).
 vn_grid:
@@ -117,6 +122,13 @@ gaez:
     - {code: CAB,   name_vi: "Bắp cải"}
     - {code: TOM,   name_vi: "Cà chua"}
     - {code: WMEL,  name_vi: "Dưa hấu"}
+
+# DATA-04: GAEZ trên lưới cả nước. Cùng file/lớp/cây/mức với `gaez`, gộp ~0,9 km thành ô cell_deg độ.
+# bbox phải chia hết cho cell_deg (và khớp lưới pixel GAEZ). Hình chữ nhật gồm cả Lào/Campuchia/biển.
+# Đọc từ xa mất khoảng 2 phút/file (96 file); có sẵn file tif đã tải thì dùng --gaez-local-dir.
+gaez_grid:
+  cell_deg: 0.1
+  bbox: [102.0, 8.0, 110.0, 24.0]
 
 # GFSAD30SEACE: đất canh tác 30 m năm 2015. Dùng để chỉ giữ điểm MODIS 250 m "thuần ruộng".
 # Tile tải tự động qua Earthdata; nếu mạng chặn urs.earthdata.nasa.gov thì tải tay và

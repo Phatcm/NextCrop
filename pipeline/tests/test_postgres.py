@@ -31,7 +31,7 @@ def test_real_migration_splits_cleanly():
 
 
 def test_load_order_matches_migration_tables():
-    created = {s.split()[2] for s in pg.split_sql((MIGRATIONS / "001_init.sql").read_text(encoding="utf-8"))
+    created = {s.split()[2] for p in sorted(MIGRATIONS.glob("*.sql")) for s in pg.split_sql(p.read_text(encoding="utf-8"))
                if s.startswith("CREATE TABLE")}
     assert set(pg.LOAD_ORDER) == created - {"schema_migrations", "pipeline_run"}
 

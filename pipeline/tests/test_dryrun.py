@@ -33,8 +33,10 @@ def test_ddl_types_and_translation_cover_every_table():
     assert set(pg.LOAD_ORDER) <= set(types)
     assert types["power_daily"]["t2m"] == "double precision" and types["power_daily"]["date"] == "date"
     assert types["dim_region"]["year_start"] == "smallint" and types["dim_region"]["mcd12q1_is_cropland"] == "boolean"
+    assert types["power_daily"]["prectotcorr_qa"] == "text"          # added by ALTER in 002
+    assert types["gaez_grid"]["hrlm"] == "smallint" and types["gaez_grid"]["lat"] == "double precision"
     ddl, views = dryrun.translate(stmts, pg.LOAD_ORDER)
-    assert sum(s.startswith("CREATE TABLE") for s in ddl) == 13 and len(views) == 2
+    assert sum(s.startswith("CREATE TABLE") for s in ddl) == 14 and len(views) == 2
     assert not any(" ~ " in s for s in ddl)
 
 
@@ -84,3 +86,25 @@ def test_server_report_on_a_real_server():
         assert not [k for k, v in rep.items() if v == "FAIL"]
     finally:
         conn.close()
+
+
+POWER_HEAD = "region_id,date,t2m,prectotcorr,prectotcorr_qa\n"
+
+
+def test_rain_qa_rows_load_and_flag_requires_null_rain(tmp_path):
+    ok = run(tmp_path, dim_region=REGION,
+             power_daily=POWER_HEAD + "r1,2020-06-13,27.1,12.3,\nr1,2020-06-14,27.5,,removed: 691.0 mm/day > 250 mm/day\n")
+    assert ok["errors"] == [] and ok["counts"]["power_daily"] == 2
+    bad = run(tmp_path / "x", dim_region=REGION,
+              power_daily=POWER_HEAD + "r1,2020-06-14,27.5,691.0,removed: 691.0 mm/day > 250 mm/day\n")
+    assert any("CHECK" in e or "constraint" in e.lower() for e in bad["errors"])
+
+
+def test_gaez_grid_rows_validate(tmp_path):
+    head = "lat,lon,crop_code,hilm,hrlm,lilm,lrlm\n"
+    ok = run(tmp_path, dim_crop=CROP, gaez_grid=head + "10.45,105.35,RCW,8000,7600,5000,\n")
+    assert ok["errors"] == [] and ok["counts"]["gaez_grid"] == 1
+    out_of_range = run(tmp_path / "y", dim_crop=CROP, gaez_grid=head + "10.45,105.35,RCW,10001,,,\n")
+    assert out_of_range["errors"]
+    unknown_crop = run(tmp_path / "z", dim_crop=CROP, gaez_grid=head + "10.45,105.35,XXX,1,,,\n")
+    assert unknown_crop["errors"]

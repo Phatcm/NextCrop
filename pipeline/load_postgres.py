@@ -93,8 +93,11 @@ def validate(conn, counts: dict, catalog: dict, start: int, end: int) -> Report:
     days = (dt.date(end, 12, 31) - dt.date(start, 1, 1)).days + 1
     bad = conn.run(f"SELECT region_id, count(*) FROM power_daily GROUP BY 1 HAVING count(*) <> {days}")
     rep.check(f"power_daily: every region has {days} days", not bad, str(bad) if bad else "")
-    rep.check("power_daily: no NULL t2m / rain (a gap is never stored as 0)",
-              scalar(conn, "SELECT count(*) FROM power_daily WHERE t2m IS NULL OR prectotcorr IS NULL") == 0)
+    rep.check("power_daily: no NULL t2m, and NULL rain only where the rain QA rule removed the day (never 0)",
+              scalar(conn, "SELECT count(*) FROM power_daily WHERE t2m IS NULL "
+                           "OR (prectotcorr IS NULL AND prectotcorr_qa IS NULL)") == 0)
+    rep.check("power_daily: no rain above the QA limit survives (250 mm/day)",
+              scalar(conn, "SELECT count(*) FROM power_daily WHERE prectotcorr > 250") == 0)
     rep.check("power_daily: t2m in [-10, 45] C", scalar(conn, "SELECT count(*) FROM power_daily WHERE t2m NOT BETWEEN -10 AND 45") == 0)
     rep.check("every region has NDVI from its primary source",
               scalar(conn, "SELECT count(*) FROM dim_region r WHERE r.ndvi_primary IS NOT NULL AND NOT EXISTS "
@@ -106,6 +109,12 @@ def validate(conn, counts: dict, catalog: dict, start: int, end: int) -> Report:
                   all(c == full for _, c in per) and len(per) == counts["dim_region"], f"expected {full} per region")
         # NOTE: no "high inputs >= low inputs" check on purpose: the GAEZ index is not monotonic in input
         # level (22 of 144 region x crop cases have LRLM > HRLM), so that is not a valid invariant.
+        if counts.get("gaez_grid"):
+            rep.check("gaez_grid: every crop of dim_crop appears in the grid",
+                      scalar(conn, "SELECT count(DISTINCT crop_code) FROM gaez_grid") == scalar(conn, "SELECT count(*) FROM dim_crop"))
+            rep.check("gaez_grid: every demo region centre has a grid cell within 0.1 deg",
+                      scalar(conn, "SELECT count(*) FROM dim_region r WHERE NOT EXISTS (SELECT 1 FROM gaez_grid g "
+                                   "WHERE abs(g.lat - r.center_lat) <= 0.1 AND abs(g.lon - r.center_lon) <= 0.1)") == 0)
         rep.check("gaez: rows with n_valid = 0 have no value",
                   scalar(conn, "SELECT count(*) FROM gaez_suitability WHERE n_valid = 0 AND value_mean IS NOT NULL") == 0)
     return rep
