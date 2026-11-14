@@ -23,6 +23,7 @@ BRONZE_SOURCES = {
     "chirps": "chc_chirps_v3",
     "gbif": "gbif_backbone",
     "faostat": "fao_faostat",
+    "boundary": "geoboundaries_vnm_adm0",
 }
 
 # Natural (primary) key of every silver dataset. Uploads are blocked if a key is not unique.
@@ -38,6 +39,7 @@ DATASET_KEYS: dict[str, list[str]] = {
     "ndvi_raw": ["region_id", "source_key", "date"],
     "gaez_suitability": ["region_id", "crop_code", "input_mode", "period", "ssp"],
     "gaez_grid": ["lat", "lon", "crop_code"],
+    "grid_vietnam": ["lat", "lon"],
     "smap_daily": ["region_id", "date"],
     "gfsad_points": ["point"],
     "landcover_by_year": ["region_id", "year"],

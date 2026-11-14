@@ -176,6 +176,19 @@ def validate(conn, counts: dict, catalog: dict, start: int, end: int, cfg: dict 
             rep.check("gaez_grid: every demo region centre has a grid cell within 0.05 deg",
                       scalar(conn, "SELECT count(*) FROM dim_region r WHERE NOT EXISTS (SELECT 1 FROM gaez_grid g "
                                    "WHERE abs(g.lat - r.center_lat) <= 0.05 AND abs(g.lon - r.center_lon) <= 0.05)") == 0)
+        if counts.get("grid_vietnam") and counts.get("gaez_grid"):
+            rep.check("grid_vietnam: one row for every distinct cell of gaez_grid",
+                      scalar(conn, "SELECT count(*) FROM (SELECT DISTINCT lat, lon FROM gaez_grid) g "
+                                   "LEFT JOIN grid_vietnam v USING (lat, lon) WHERE v.lat IS NULL") == 0
+                      and counts["grid_vietnam"] == scalar(conn, "SELECT count(*) FROM (SELECT DISTINCT lat, lon FROM gaez_grid) g"))
+            rep.check("grid_vietnam: every demo region centre falls in a cell inside Viet Nam",
+                      scalar(conn, "SELECT count(*) FROM dim_region r WHERE NOT EXISTS (SELECT 1 FROM grid_vietnam v "
+                                   "WHERE v.in_vietnam AND abs(v.lat - r.center_lat) <= 0.05 AND abs(v.lon - r.center_lon) <= 0.05)") == 0)
+            rep.check("grid_vietnam: the mask separates inside from outside (some cells in, some out, one threshold)",
+                      scalar(conn, "SELECT count(*) FROM grid_vietnam WHERE in_vietnam") > 0
+                      and scalar(conn, "SELECT count(*) FROM grid_vietnam WHERE NOT in_vietnam") > 0
+                      and scalar(conn, "SELECT coalesce(min(vn_share) FILTER (WHERE in_vietnam), 1) >= "
+                                       "coalesce(max(vn_share) FILTER (WHERE NOT in_vietnam), 0) FROM grid_vietnam"))
         rep.check("gaez: rows with n_valid = 0 have no value",
                   scalar(conn, "SELECT count(*) FROM gaez_suitability WHERE n_valid = 0 AND value_mean IS NOT NULL") == 0)
     return rep

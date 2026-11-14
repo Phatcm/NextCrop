@@ -165,7 +165,11 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - POWER và MODIS kết thúc cuối 2025 (thiếu ~10,5 tháng của 2026); GFSAD chỉ có 2015; GIBS chỉ 2023–2025.
 - Mốc NDVI sớm nhất là **2014-12-19** (composite 16 ngày đầu tiên của 2015 bắt đầu từ cuối 2014) trong khi `dim_region.year_start = 2015`: lệch nhỏ, cần lọc hoặc ghi chú.
 
-### DATA-14 · Trung bình · Điểm ngoài Việt Nam vẫn nhận phương án luân canh
+### DATA-14 · ĐÃ XỬ LÝ phần dữ liệu (14/11/2026, bảng `grid_vietnam`, migration 011) · Điểm ngoài Việt Nam vẫn nhận phương án luân canh
+- **Đã làm:** bảng `grid_vietnam(lat, lon, vn_share, in_vietnam)`, một dòng cho mỗi ô của `gaez_grid` (12.813 ô, 4.040 ô trong Việt Nam). Nguồn: geoBoundaries gbOpen ADM0 (CC BY 4.0, đa giác đã giản lược, sai số ~1 km), mỗi ô thử lưới 8 x 8 điểm, `in_vietnam` khi >= 50% diện tích ô nằm trong nước. Kiểm tra: Viêng Chăn, Phnôm Pênh, Côn Minh, vịnh Thái Lan đều `false`; sáu vùng và Hà Nội đều `true`.
+- **API/app cần làm (phần của Phát):** nối `JOIN grid_vietnam USING (lat, lon)` và từ chối ô có `in_vietnam = false` với mã lỗi `outside_vietnam`. Bản đồ nên tô mờ các ô `false`.
+- **Còn lại:** đảo Hoàng Sa, Trường Sa nằm ngoài lưới có dữ liệu GAEZ (không có ô nào).
+- **Bản gốc của vấn đề (giữ để tham chiếu):**
 - **Vấn đề:** `gaez_grid` là hình chữ nhật 102–110°E, 8–24°N nên có cả Lào, Campuchia và miền nam Trung Quốc. Bộ sinh phương án không biết ranh giới quốc gia: điểm ở Viêng Chăn (17,97°N 102,6°E) nhận kết quả đầy đủ như điểm ở Việt Nam. Điểm ngoài biển thì bị từ chối đúng (không có ô trong 0,1°).
 - **[ĐÃ XÁC NHẬN] 14/11** bằng lệnh `rotation_options.py` với điểm ở Viêng Chăn. Dữ liệu GAEZ ở đó vẫn là GAEZ hợp lệ; vấn đề là phạm vi sản phẩm (đề và dữ liệu mưa hiệu chỉnh chỉ cho Việt Nam).
 - **Hướng xử lý:** cần một lớp ranh giới Việt Nam (chưa có trong repo; ứng viên: ranh giới quốc gia của UN/GADM, **[CHƯA KIỂM CHỨNG]** giấy phép) để (a) giới hạn vùng chọn trên bản đồ, và/hoặc (b) thêm cột `in_vietnam` vào `gaez_grid` lúc ETL. App phải tự giới hạn cho đến khi có.
