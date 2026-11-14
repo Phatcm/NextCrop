@@ -49,6 +49,30 @@ def test_valid_data_passes_and_views_compile(tmp_path):
     assert top == [("RCW", 1)]
 
 
+def test_create_or_replace_view_replaces_the_earlier_definition_of_the_same_view():
+    stmts = ["CREATE VIEW v AS SELECT 1 AS a", "CREATE VIEW w AS SELECT 5 AS z",
+             "CREATE OR REPLACE VIEW v AS SELECT 2 AS a, 3 AS b"]
+    _, views = dryrun.translate(stmts, [])
+    assert views == ["CREATE VIEW v AS SELECT 2 AS a, 3 AS b", "CREATE VIEW w AS SELECT 5 AS z"]
+
+
+def test_crop_ranking_view_has_traits_and_ranks_annual_crops_separately(tmp_path):
+    crops = ("crop_code,name_vi,name_verified,life_cycle,gaez_group,water_regime\n"
+             "RCW,Lúa nước,True,annual,Cereals,wetland\n"
+             "CON,Dừa,True,perennial,Fruits,upland\n"
+             "SOY,Đậu tương,True,annual,Oil crops,upland\n")
+    gaez = (GAEZ_HEAD + "r1,RCW,HRLM,HP0120,AGERA5,HIST,4,4,8000\n" + "r1,CON,HRLM,HP0120,AGERA5,HIST,4,4,9000\n"
+            + "r1,SOY,HRLM,HP0120,AGERA5,HIST,4,4,7000\n")
+    res = run(tmp_path, dim_region=REGION, dim_crop=crops, gaez_suitability=gaez)
+    assert res["errors"] == [] and res["warnings"] == []
+    rows = res["connection"].execute(
+        "SELECT crop_code, rank, rank_annual, life_cycle, gaez_group, water_regime FROM v_crop_ranking "
+        "ORDER BY rank").fetchall()
+    assert rows == [("CON", 1, None, "perennial", "Fruits", "upland"),        # coconut is first overall, not annual
+                    ("RCW", 2, 1, "annual", "Cereals", "wetland"),
+                    ("SOY", 3, 2, "annual", "Oil crops", "upland")]
+
+
 @pytest.mark.parametrize("name,tables,needle", [
     ("float in integer column", {"dim_region": REGION, "dim_crop": CROP,
         "gaez_suitability": GAEZ_HEAD + "r1,RCW,HRLM,HP0120,AGERA5,HIST,144.0,144,8500\n"}, "not an integer"),

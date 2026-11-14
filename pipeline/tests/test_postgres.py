@@ -61,7 +61,8 @@ def test_migrate_copy_and_constraints(tmp_path):
                                                                          "006_gaez_grid_cropland",
                                                                          "007_crop_profile",
                                                                          "008_gaez_suitability_cropland",
-                                                                         "009_environment_inputs"]
+                                                                         "009_environment_inputs",
+                                                                         "010_crop_ranking_view"]
         assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == []        # idempotent
         conn.run(f"SET search_path TO {pg.SCHEMA}")
 
@@ -157,6 +158,18 @@ def test_migrate_copy_and_constraints(tmp_path):
         with pytest.raises(Exception):   # shares of >24 percent cannot exceed >12 percent
             pg.copy_csv(conn, "terrain_slope", csv("ts.csv",
                 "region_id,slope_mean_pct,share_gt12_pct,share_gt24_pct,n_px\nr1,10,5,20,100\n"))
+        # ranking view with crop traits and a separate rank for annual crops (migration 010)
+        assert [r[0] for r in conn.run(
+            "SELECT column_name FROM information_schema.columns WHERE table_schema = 'field_shift' "
+            "AND table_name = 'v_crop_ranking' ORDER BY ordinal_position")] == [
+            "region_id", "input_mode", "crop_code", "name_vi", "name_verified", "value_mean", "value_center", "rank",
+            "life_cycle", "gaez_group", "water_regime", "rank_annual"]           # new columns appended, old ones kept
+        pg.copy_csv(conn, "gaez_suitability", csv("gs_rank.csv",
+            "region_id,crop_code,input_mode,period,climate,ssp,n_px,n_valid,value_mean\n"
+            "r1,SOY,HILM,HP0120,AGERA5,HIST,4,4,5000\nr1,COF,HILM,HP0120,AGERA5,HIST,4,4,9000\n"))
+        assert conn.run("SELECT crop_code, rank, rank_annual, life_cycle FROM v_crop_ranking "
+                        "WHERE region_id = 'r1' AND input_mode = 'HILM' ORDER BY rank") == [
+            ["COF", 1, None, "perennial"], ["SOY", 2, 1, "annual"]]               # perennial first overall, not ranked
         with pytest.raises(Exception):   # unknown region -> foreign key
             pg.copy_csv(conn, "power_monthly", csv("m.csv", "region_id,month\nnope,2015-01\n"))
         with pytest.raises(Exception):   # out-of-range value -> CHECK
