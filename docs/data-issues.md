@@ -37,8 +37,8 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 | DATA-03 | Cao | Thiếu đầu vào: độ dốc, bốc thoát hơi nước, thấm nước, đất | Phát |
 | DATA-04 | ~~Trung bình~~ Đã xử lý phần GAEZ | Chỉ 6 vùng có đủ dữ liệu (GAEZ đã có cả nước, xem mục 3) | Cả hai |
 | DATA-05 | ~~Cao~~ Đã xử lý (còn 3 ngày dưới ngưỡng và lưới) | Mưa phi lý (691 mm/ngày) lan sang bảng tháng, năm, chuẩn khí hậu | Phát |
-| DATA-06 | ~~Cao~~ Đã xử lý trong mã (chờ đẩy R2/Neon) | Mưa POWER lệch tới 2,3 lần (Ninh Thuận) | Phát |
-| DATA-07 | ~~Trung bình~~ Đã xử lý trong mã (chờ đẩy R2/Neon) | Mưa 2015 Đắk Lắk sai (POWER 423 mm, CHIRPS 1.653) | Phát |
+| DATA-06 | ~~Cao~~ Đã xử lý (PR #6, đã nạp R2/Neon) | Mưa POWER lệch tới 2,3 lần (Ninh Thuận) | Phát |
+| DATA-07 | ~~Trung bình~~ Đã xử lý (PR #6, đã nạp R2/Neon) | Mưa 2015 Đắk Lắk sai (POWER 423 mm, CHIRPS 1.653) | Phát |
 | DATA-08 | Trung bình | SMAP chất lượng khuyến nghị 0% ở 4/6 vùng | Phát |
 | DATA-09 | Trung bình | NDVI nội suy nhiều ở đồng bằng | Phát |
 | DATA-10 | Trung bình | MODIS và GFSAD mâu thuẫn ở Sơn La, Đắk Lắk | Cả hai |
@@ -99,14 +99,14 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - **Cải thiện sau (đã hoãn, 14/11):** ERA5 chỉ là tái phân tích, chưa phải số đo. Để phân xử 3 ca ranh giới nên đối chiếu thêm nguồn độc lập: **GPM IMERG** (NASA, vệ tinh hiệu chỉnh bằng trạm, nằm trong danh sách nguồn của đề, cần Earthdata; **[CHƯA KIỂM CHỨNG]** cách truy cập) hoặc trạm **NOAA GHCN-Daily** gần 6 vùng (**[CHƯA KIỂM CHỨNG]** có trạm đủ gần và đủ 2015–2025 không). Chỉ cần kiểm khoảng 9 ngày bị loại và vài ngày bị giữ. Cũng nên dùng chuỗi ERA5 đã cache trong `bronze/era5` để làm DATA-06/07 (so tổng mưa năm của POWER với ERA5 cho 6 vùng), không cần tải thêm.
 - **Chưa xử lý:** lưới khí hậu cả nước (`vn_grid_monthly`) là dữ liệu tháng nên không áp được quy tắc theo ngày; ô lưới chứa An Giang vẫn mang số tháng 6/2020 cao bất thường.
 
-### DATA-06 · ĐÃ XỬ LÝ trong mã (14/11/2026, chưa đẩy R2/Neon) · Mưa POWER lệch tới 2,3 lần ở Ninh Thuận
+### DATA-06 · ĐÃ XỬ LÝ (14/11/2026, PR #6; đã nạp R2 và Neon) · Mưa POWER lệch tới 2,3 lần ở Ninh Thuận
 - **Kiểm chứng (3 nguồn + trạm):** trung bình năm 2016–2025, POWER / ERA5 / CHIRPS v3: Ninh Thuận 2.031 / 1.507 / 896; Sơn La 1.705 / 1.345 / 1.370; Đắk Lắk 2.049 / 1.218 / 2.031; Thái Bình 1.989 / 1.778 / 1.917; An Giang 1.993 / 1.820 / 1.683; Sóc Trăng 2.055 / 1.987 / 2.119 (mm). Trạm NOAA GHCN-Daily: Sơn La (VMM00048806) 1.348 mm/năm (2016–2024) khớp CHIRPS, POWER cao hơn 26%; Phan Rang (VMW00041022) chỉ có 1966–67: 915 và 638 mm, cỡ ~780 mm, cho thấy Ninh Thuận khô thật. ERA5 không đủ làm trọng tài (cũng sai ở Ninh Thuận và Đắk Lắk 1.218 mm so với 2.0xx).
 - **Cách xử lý:** thêm CHIRPS v3 (UCSB CHC, 0,05°, hiệu chỉnh bằng trạm, CC0) đọc theo cửa sổ HTTP (`src/extractors/chirps.py`); `src/transformers/rain_validation.py` so POWER với CHIRPS theo năm; bảng mới `rain_monthly_best` (mưa tháng app phải dùng: CHIRPS, POWER chỉ là dự phòng có đánh dấu) và `rain_validation` (migration 004); gold có `climate.rain_best` và caveat theo vùng. `power_*` giữ nguyên.
 - **Kết quả phán quyết (lệch > 30%):** Ninh Thuận `power_biased` (+126%, cả 11 năm); Sơn La, An Giang `power_bad_years` (năm lệch: 2018/19/21; 2018–2022); Đắk Lắk `power_bad_years` (2015); Thái Bình, Sóc Trăng nhất quán.
 - **Giới hạn:** CHIRPS là ước lượng vệ tinh + trạm ~5 km, không phải số đo trạm; Phan Rang chỉ có 2 năm trạm (thập niên 1960). Chưa dùng GPM IMERG (cần Earthdata, chưa kiểm chứng cách truy cập). Lưới cả nước `vn_grid_monthly` vẫn là POWER (chưa thay).
-- **Việc còn lại:** chạy `upload_r2.py --prune` rồi `load_postgres.py` (validation mới thêm 3 kiểm tra); app đổi sang đọc `rain_monthly_best`.
+- **Đã nạp:** R2 run `20261114T071843Z` (657 object, 0 lỗi) và Neon (27/27 kiểm tra, gồm cả bảng cây trồng DATA-01). **Việc còn lại:** app đổi sang đọc `rain_monthly_best`.
 
-### DATA-07 · ĐÃ XỬ LÝ trong mã (14/11/2026) · Năm 2015 khô cực đoan
+### DATA-07 · ĐÃ XỬ LÝ (14/11/2026, PR #6; đã nạp R2 và Neon) · Năm 2015 khô cực đoan
 - **Kết luận:** một phần là lỗi POWER. Đắk Lắk 2015: POWER 423 mm, ERA5 895, CHIRPS 1.653 (bằng 0,81 trung bình năm khác) nên 423 là sai, không phải El Niño. An Giang 2015: POWER 809, CHIRPS 1.083 (0,64 trung bình). Ninh Thuận 2015 khô thật (CHIRPS 516, 0,58 trung bình) nhưng POWER ghi 1.259. El Niño 2015–16 có thật ở An Giang và Ninh Thuận, và CHIRPS vẫn ghi nhận khô hơn bình thường.
 - **Cách xử lý:** cùng DATA-06: `rain_validation` đánh dấu năm lệch > 30%, app dùng `rain_monthly_best`.
 
