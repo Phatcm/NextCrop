@@ -11,21 +11,21 @@ Người dùng chọn vị trí, cây hiện tại và ưu tiên (tiết kiệm 
 - nhắc rõ đây là công cụ **hỗ trợ**, không thay thế phán đoán của nông dân hay chuyên gia địa phương.
 
 ## Dữ liệu đầu vào
-App đọc file dữ liệu đã xử lý, **không gọi API ngoài lúc chạy**. Cấu trúc file và nơi lưu (Cloudflare R2) xem `docs/data-contract.md` và thư mục `pipeline/`.
+App đọc **PostgreSQL (Neon) qua API trong `app/api/`**, **không gọi API ngoài (NASA, FAO) lúc chạy**. Pipeline nạp dữ liệu vào Postgres; mô hình dữ liệu xem `docs/data-contract.md`.
 
-## Cấu trúc (dự kiến)
+## Cấu trúc
 ```
-src/        mã ứng dụng
-public/     tài nguyên tĩnh
-docs/       ghi chú thiết kế
+api/        backend FastAPI (chỉ đọc): phương án luân canh, danh sách cây, ô lưới cho bản đồ. Xem api/README.md
+web/        giao diện (dự kiến, chưa có; do người làm giao diện đặt tên thư mục)
 ```
 
 ## Chạy
-_(bổ sung khi có mã)_
+Backend: xem [api/README.md](api/README.md) (`uvicorn fieldshift_api.main:app --port 8000` trong `app/api`, cần `APP_DATABASE_URL`).
+Giao diện: _(bổ sung khi có mã)_
 
 ## Nguồn dữ liệu và ghi công
 - NASA POWER, NASA MODIS (NDVI), NASA GFSAD30
 - FAO & IIASA. 2025. Global Agro-ecological Zoning version 5 (GAEZ v5) Model Documentation (CC BY 4.0)
 
 ## Công cụ AI đã dùng
-- **Claude Code** (Anthropic) được dùng trong dự án (xem README gốc). Phần dùng cho mã ứng dụng sẽ được ghi cụ thể tại đây khi có.
+- **Claude Code** (Anthropic) được dùng trong dự án (xem README gốc). Với mã ứng dụng: backend `app/api/` (14/11/2026) được viết cùng Claude Code (mô hình Claude Sonnet 5.5); bộ sinh phương án luân canh mà API gọi (`pipeline/src/rotation/`) cũng viết cùng Claude Code. Phần giao diện sẽ được ghi tại đây khi có.

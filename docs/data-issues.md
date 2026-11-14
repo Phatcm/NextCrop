@@ -33,7 +33,7 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 | ID | Mức | Việc | Gợi ý người làm |
 |---|---|---|---|
 | DATA-01 | ~~Nghiêm trọng~~ Đã xử lý phần bảng (còn giá, độ phủ đất, nguồn khuyến nông) | Bảng cây trồng 24 cây đã vào `dim_crop` (PR #4) và đã nạp R2/Neon (14/11) | Hùng + Phát |
-| DATA-02 | ~~Cao~~ Đã xử lý phần sinh phương án (còn nối vào app) | Bộ sinh 4 phương án mức vụ đã có và có test; app chưa gọi nó | Phát |
+| DATA-02 | ~~Cao~~ Đã xử lý phần sinh phương án (còn nối giao diện) | Bộ sinh 4 phương án mức vụ đã có và có test; API `app/api` (`GET /api/options`) đã gọi nó với dữ liệu Neon; giao diện chưa nối | Phát |
 | DATA-03 | ~~Cao~~ Đã xử lý phần dữ liệu cho 6 vùng (còn thiếu thấm nước, kết cấu đất, Kc, chi phí) | Độ dốc, ET0 và cân bằng nước, đất, nhu cầu tưới theo cây, xói mòn tương đối | Hùng + Phát |
 | DATA-04 | ~~Trung bình~~ Đã xử lý phần GAEZ | Chỉ 6 vùng có đủ dữ liệu (GAEZ đã có cả nước, xem mục 3) | Cả hai |
 | DATA-05 | ~~Cao~~ Đã xử lý (còn 3 ngày dưới ngưỡng và lưới) | Mưa phi lý (691 mm/ngày) lan sang bảng tháng, năm, chuẩn khí hậu | Phát |
@@ -47,7 +47,8 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 | DATA-13 | Thấp | Đơn vị và ngày tạo chưa có trong Postgres | Phát |
 | DATA-14 | Trung bình | Điểm ngoài Việt Nam (Lào, Campuchia, Trung Quốc) vẫn nhận phương án | Hùng (app) + Phát |
 | DATA-15 | Thấp (enhancement), **view đã xong** | Gợi ý theo nhóm cây: tách luân canh (cây một năm) khỏi chuyển đổi (cây lâu năm). View `v_crop_ranking` đã có `rank_annual` (migration `010`); còn tầng chuyển đổi và lọc nhóm | Phát |
-| OPS-01..10 | xem mục 4 | | |
+| DATA-16 | Thấp (enhancement, làm sau cuộc thi nếu còn thời gian) | Ô dữ liệu nhỏ hơn 80–85 km²: lớp GAEZ 30 giây cung kết hợp lớp che đất canh tác | Phát |
+| OPS-01..13 | xem mục 4 | | |
 
 ## 3. Vấn đề dữ liệu
 
@@ -178,6 +179,13 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - **Cho app:** không hiện `rank` thô như danh sách gợi ý luân canh; lọc `rank_annual IS NOT NULL` và xếp theo `rank_annual`. Ở vùng có chỉ số chạm trần (Ninh Thuận, Thái Bình) nhiều cây hòa hạng: hiện cả nhóm hòa.
 - **Xong khi:** app không còn gợi ý cây lâu năm trong luồng luân canh, có test.
 
+### DATA-16 · Thấp (enhancement, làm sau cuộc thi nếu còn thời gian) · Ô dữ liệu nhỏ hơn
+- **Vấn đề:** mọi gợi ý dùng lớp `RES05-SUX` có lưới gốc 5 phút cung: mỗi pixel là một ô **khoảng 80–85 km²** (8.000–8.500 ha; 84,4 km² ở An Giang, khoảng 80 km² ở miền Bắc vì kinh tuyến hẹp dần). Chỉ số là mức trung bình cho cả vùng đó, không phải cho một thửa ruộng. Muốn ô nhỏ hơn.
+- **Hướng xử lý [CHƯA KIỂM CHỨNG]:** (1) lớp GAEZ 30 giây cung `RES05-SXX30AS` (pixel khoảng 0,85 km², nhỏ hơn khoảng 100 lần), nhưng lớp này tính trung bình cả pixel gồm rừng và đất dốc nên vùng đồi núi bị đánh giá thấp: đó là lý do đã chuyển sang SUX (Sơn La, ngô 282–1185 so với 1728–2485; 55% ô không có cây một năm đạt 4000 so với 9%). (2) Lớp 30 giây kết hợp một lớp che đất canh tác (MODIS MCD12Q1 hoặc ESA WorldCover; cần chọn nguồn và kiểm tra khớp với GAEZ), chỉ lấy trung bình trên pixel đất canh tác.
+- **Lưu ý:** khí hậu đầu vào của GAEZ thô hơn nhiều (cỡ 10 km), nên pixel nhỏ hơn chủ yếu thêm chi tiết địa hình và đất, không thêm chi tiết khí hậu; không được hiển thị như kết quả theo từng thửa. Dữ liệu lớn hơn khoảng 100 lần (khung 102–110°E, 8–24°N ở 30 giây cung là khoảng 1,8 triệu pixel mỗi lớp, nhân 24 cây và 4 mức), nên phải đổi cách lưu, cách bảo vệ chống lỗi (`guards.py`), API `/api/cells` và cách vẽ bản đồ (ảnh ghép lớp thay cho từng ô).
+- **Quyết định 14/11:** giữ ô 5 phút cho bản thi; ghi backlog.
+- **Xong khi:** có một lớp ô nhỏ hơn với nguồn che đất đã kiểm chứng, so với SUX ở 6 vùng demo, và giao diện không gợi ý độ chính xác theo thửa.
+
 ### DATA-13 · Thấp · Đơn vị và ngày tạo chưa có trong Postgres
 - Đơn vị (°C, mm/ngày, %, m/s, MJ/m²/ngày, m³/m³) chỉ nằm trong JSON gold; bảng Postgres không có. `dim_region` không có ngày tạo (chỉ `pipeline_run.loaded_at`).
 - **Hướng xử lý:** `COMMENT ON COLUMN` ghi đơn vị trong migration mới, hoặc thêm bảng `column_units`.
@@ -198,8 +206,8 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 ### OPS-05 · Thấp · Đăng nhập Earthdata
 - AppEEARS cần tên đăng nhập + mật khẩu. `EARTHDATA_TOKEN` cho tải tile GFSAD **chưa kiểm chứng**. Tải GFSAD cần truy cập được `urs.earthdata.nasa.gov`; trên mạng đã dùng, host này bị chặn và phải bật VPN.
 
-### OPS-06 · Trung bình · README của `app/` còn ghi "đọc file tĩnh"
-- README gốc và `data-contract.md` đã sửa theo quyết định dùng PostgreSQL; `app/README.md` chưa sửa (người làm app cập nhật).
+### OPS-06 · ĐÃ XONG (14/11/2026) · README của `app/` còn ghi "đọc file tĩnh"
+- `app/README.md` đã sửa: app đọc PostgreSQL qua API (`app/api`), không đọc file tĩnh.
 
 ### OPS-07 · Trung bình · Thể lệ và hồ sơ nộp
 - Mục "Công cụ AI đã dùng" trong ba README đã điền (Claude Code); khi nộp bài cần khai báo lại trong biểu mẫu và bổ sung nếu dùng cho mã app.
@@ -212,13 +220,22 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - Node 20 sắp ngừng hỗ trợ và `ubuntu-latest` sẽ chuyển sang Ubuntu 26 từ 19/10/2026. Hiện chưa gây lỗi.
 
 ### OPS-10 · Trung bình · App đọc dữ liệu từ đâu
-- `R2_PUBLIC_BASE_URL` đang trống: bucket chưa công khai. App dùng Postgres nên chưa cần, nhưng nếu muốn xuất JSON tĩnh (gold) thì phải quyết định mở đọc công khai.
+- `R2_PUBLIC_BASE_URL` đang trống: bucket chưa công khai. App dùng Postgres (qua API `app/api`) nên chưa cần, nhưng nếu muốn xuất JSON tĩnh (gold) thì phải quyết định mở đọc công khai.
+
+### OPS-11 · Trung bình · Role chỉ đọc cho API
+- API chạy mọi truy vấn trong `BEGIN READ ONLY ... ROLLBACK` nên **không ghi được dữ liệu kể cả khi dùng `neondb_owner`** (có test với Postgres thật, chạy khi đặt `TEST_DATABASE_URL`; xem OPS-13 về CI). Dù vậy vẫn nên tạo role chỉ đọc theo `docs/postgres-hosting.md` mục 2 và đặt chuỗi kết nối của nó vào `APP_DATABASE_URL`. Tạo role là ghi vào Neon và liên quan mật khẩu, nên do Phát hoặc Hùng làm.
+
+### OPS-13 · Trung bình · CI cho API chưa bật
+- Workflow `api-tests` (test API và test `PgRepo` với Postgres 17 thật) đã soạn ở `app/api/ci/api-tests.yml` nhưng **chưa nằm trong `.github/workflows/`**: đẩy lên bị GitHub từ chối vì token của `gh` trên máy này thiếu quyền `workflow` (`refusing to allow an OAuth App to create or update workflow`). Để bật: chạy `gh auth refresh -s workflow` (cần trình duyệt), rồi `git mv app/api/ci/api-tests.yml .github/workflows/api-tests.yml` và đẩy. Cho tới lúc đó 5 test Postgres thật của API **chưa được chạy ở đâu**; 43 test còn lại đã qua cục bộ.
+
+### OPS-12 · Trung bình · Nơi chạy API
+- Chưa chọn nơi chạy `app/api` (máy k3s, Render, Fly...). API cần Python 3.13, `APP_DATABASE_URL` (hoặc `DATABASE_URL_POOLED`) và `CORS_ORIGINS` (địa chỉ giao diện). Chưa có Dockerfile (chưa thử Docker trên máy này). Đo ngày 14/11 từ máy dev tới Neon: lần gọi đầu khoảng 1,9 giây (kết nối và đọc bảng cây), ô mới khoảng 0,6 giây, cùng ô lần sau khoảng 2 mili giây (bộ nhớ đệm 5 phút).
 
 ## 5. Quyết định cần chốt
 1. Danh sách vùng demo cuối (giữ hay bỏ Sơn La, Đắk Lắk; dùng Ninh Thuận làm vùng khô thế nào).
 2. Ai định nghĩa phương án luân canh và bằng cách nào (DATA-02).
 3. Có thêm GPM / SMAP L4 / Aqua không, hay chỉ ghi cảnh báo.
-4. Nhà cung cấp và cách app truy cập Postgres.
+4. ~~Cách app truy cập Postgres~~ đã chốt: qua API `app/api` (14/11). Còn lại: nhà cung cấp Postgres hiện là Neon; nơi chạy API (OPS-12).
 5. Thời điểm mở PR và merge; bucket có công khai không.
 
 ## 6. Cách chạy và tái hiện

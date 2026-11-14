@@ -1,0 +1,35 @@
+name: api-tests
+
+on:
+  push:
+    paths: ['app/api/**', 'pipeline/src/rotation/**', 'pipeline/src/db/**', 'pipeline/db/migrations/**', '.github/workflows/api-tests.yml']
+  pull_request:
+    paths: ['app/api/**', 'pipeline/src/rotation/**', 'pipeline/src/db/**', 'pipeline/db/migrations/**', '.github/workflows/api-tests.yml']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:                       # disposable database for tests/test_repo_pg.py
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust   # throwaway container, reachable only from this runner
+          POSTGRES_DB: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: app/api
+    env:
+      TEST_DATABASE_URL: postgresql://postgres@localhost:5432/test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: app/api/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -v
