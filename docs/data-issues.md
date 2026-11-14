@@ -14,7 +14,7 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 
 - **Nạp Postgres thật (OPS-01): đã xong.** Neon (PostgreSQL 18.7): 402.709 dòng, 19/19 kiểm tra qua (lần đầu); **14/11 lần nạp thứ hai: 625.429 dòng, 23/23 kiểm tra qua, run `20261114T041950Z`, migration 002 đã áp**, chạy lại lần hai vẫn qua; app đọc được qua cả chuỗi pooled và direct. **14/11 lần nạp thứ ba (bảng cây trồng, DATA-01): R2 run `20261114T071439Z` (736 đối tượng, 0 lỗi), Neon 625.429 dòng, 25/25 kiểm tra qua, migration `003` đã áp** (migration `004` của DATA-06/07 chưa nạp).
 
-**Chưa xong**: phần còn lại của DATA-01 (giá, độ phủ đất, độ dài vụ thực tế ở Việt Nam, họ thực vật có nguồn trích dẫn), và các vấn đề độ chính xác bên dưới.
+**Chưa xong**: phần còn lại của DATA-01 (độ dài vụ thực tế ở Việt Nam, ý nghĩa `min_temp_c`, nhu cầu nước; giá, độ phủ đất và họ thực vật đã có ở bảng `crop_profile`, xem DATA-01), và các vấn đề độ chính xác bên dưới.
 
 **Vị trí**
 - Mã: repo `Phatcm/field-shift`; PR #1, #2 (DATA-04/05) và #4 (DATA-01 phần bảng, migration `003`) đã vào `main`.
@@ -50,7 +50,11 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 
 ## 3. Vấn đề dữ liệu
 
-### DATA-01 · ĐÃ XỬ LÝ phần bảng (14/11/2026, PR #4) · Thiếu bảng cây trồng
+### DATA-01 · ĐÃ XỬ LÝ phần bảng (14/11/2026, PR #4) và phần 2 (14/11, bảng `crop_profile`, migration 007) · Thiếu bảng cây trồng
+- **Phần 2 (làm tiếp thay Phát, bảng mới, không sửa `dim_crop` / `crop_traits.csv`):** `crop_profile` (24 cây) gồm: (1) **họ thực vật có nguồn**: GBIF Backbone Taxonomy (khóa `gbif_usage_key`), cả 24 họ khớp cột `family` của Phát; (2) **giá và năng suất Việt Nam** từ FAOSTAT (giá người sản xuất USD/tấn, năng suất kg/ha, trung bình quốc gia 2020–2024, chỉ lấy năm có đủ cả hai), `gross_revenue_usd_ha` = giá x năng suất = **doanh thu thô trên 1 ha cho 1 vụ (cây hằng năm) hoặc 1 năm (cây lâu năm), KHÔNG phải lợi nhuận** (không có chi phí); (3) **lớp chống xói mòn** `erosion_protection` (cao/trung bình/thấp) kèm `cover_basis` và `cover_confidence`.
+  - **20/24 cây có giá và doanh thu.** Thiếu có chủ đích (để NULL, không đoán): taro, cọ dầu, cà chua (FAOSTAT không có mục cho Việt Nam), dừa (giá USD chỉ có năm 2015, chuỗi nội tệ đứt năm 2017). Đậu đũa dùng đậu khô, cam quýt dùng cam, lúa cạn dùng lúa nước (`faostat_match = proxy`).
+  - **Giới hạn cần nói khi trình bày:** giá và năng suất là **trung bình quốc gia**, không phải theo tỉnh; năng suất lúa quốc gia chủ yếu là lúa nước nên lạc quan với lúa cạn. Lớp chống xói mòn: **chỉ 7/24 dòng có căn cứ đọc được qua bản tóm tắt tìm kiếm** (`documented_secondary`, bài gốc chưa đọc: JICA Indonesia C lúa tưới 0,010 và ngô 0,245; một nghiên cứu Lampung cho cà phê C 0,004–0,045; một tổng quan FAO về sắn cho cây lâu năm C 0,1–0,3), 17/24 dòng là **giả định của dự án** (`assumed`). FAO-56 và trang FAO bị chặn bot nên chưa lấy được hệ số Kc.
+  - **Vẫn chưa làm:** số ngày sinh trưởng thực tế ở Việt Nam (USDA crop calendar trả 503, FAO GIEWS bị chặn), ý nghĩa của `min_temp_c`, và cột nhu cầu nước (sẽ lấy từ GAEZ `RES05-WDC` trong DATA-03).
 - **Đã làm (PR #4, CI xanh gồm Postgres 17 thật):** `pipeline/crop_traits.csv` cho 24 cây, migration `003_crop_traits.sql`, cột: mã `RES02`, nhóm GAEZ, một năm/lâu năm, họ đậu, họ thực vật, độ dài vụ ứng viên (min/max), nhiệt tối thiểu, nguồn từng nhóm cột. Cây không có dòng trong bảng GAEZ (taro, vừng, điều, dưa hấu) để trống cột sinh trưởng, không đoán. Bộ đọc từ chối dòng sai số cột.
 - **Đã nạp (14/11):** R2 run `20261114T071439Z`, Neon migration `003`, 25/25 kiểm tra qua, đọc lại 24 cây khớp `crop_traits.csv`.
 - **Chưa làm:** giá thị trường; độ phủ đất chống xói mòn; số ngày sinh trưởng thực tế ở Việt Nam; đối chiếu họ thực vật với nguồn trích dẫn; ý nghĩa chính xác của `min_temp_c` (Appendix 4-5).

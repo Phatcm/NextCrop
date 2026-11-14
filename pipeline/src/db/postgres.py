@@ -8,7 +8,7 @@ from pathlib import Path
 SCHEMA = "field_shift"
 
 # Parents before children (foreign keys). dim_* first; vn_grid_monthly has no parent.
-LOAD_ORDER = ["dim_region", "dim_crop", "power_daily", "power_monthly", "rain_validation", "rain_monthly_best", "ndvi_series", "ndvi_raw", "smap_daily",
+LOAD_ORDER = ["dim_region", "dim_crop", "crop_profile", "power_daily", "power_monthly", "rain_validation", "rain_monthly_best", "ndvi_series", "ndvi_raw", "smap_daily",
               "gfsad_points", "landcover_by_year", "landcover_classes", "terrain", "gaez_suitability",
               "gaez_grid", "vn_grid_monthly"]
 

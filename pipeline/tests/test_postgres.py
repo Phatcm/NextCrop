@@ -59,6 +59,7 @@ def test_migrate_copy_and_constraints(tmp_path):
                                                                          "004_rain_validation",
                                                                          "005_crop_water_regime",
                                                                          "006_gaez_grid_cropland",
+                                                                         "007_crop_profile",
                                                                          "008_gaez_suitability_cropland"]
         assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == []        # idempotent
         conn.run(f"SET search_path TO {pg.SCHEMA}")
@@ -117,6 +118,20 @@ def test_migrate_copy_and_constraints(tmp_path):
         with pytest.raises(Exception):   # best_mm must equal chirps_mm for best_source = chirps
             pg.copy_csv(conn, "rain_monthly_best", csv("rb2.csv",
                 "region_id,month,power_mm,chirps_mm,best_mm,best_source\nr1,2015-02,50.0,40.0,50.0,chirps\n"))
+        # crop profile (migration 007)
+        head = ("crop_code,scientific_name,gbif_family,family_check,faostat_match,price_usd_per_t,yield_kg_ha,"
+                "gross_revenue_usd_ha,erosion_protection,cover_confidence,cover_basis\n")
+        pg.copy_csv(conn, "crop_profile", csv("cp.csv", head +
+            "RCW,Oryza sativa,Poaceae,match,direct,300.0,6000,1800,high,assumed,paddy\n"
+            "MZE,Zea mays,,unverified,none,,,,low,assumed,no item\n"))
+        assert conn.run("SELECT gross_revenue_usd_ha FROM crop_profile WHERE crop_code = 'MZE'") == [[None]]
+        for name, line in (("cp2", "SOY,Glycine max,Fabaceae,match,none,300.0,6000,1800,low,assumed,x\n"),      # price with no item
+                           ("cp3", "SOY,Glycine max,Fabaceae,match,direct,300.0,,,low,assumed,x\n"),            # price without yield
+                           ("cp4", "SOY,Glycine max,,match,direct,,,,low,assumed,x\n"),                         # family_check without family
+                           ("cp5", "SOY,Glycine max,Fabaceae,match,direct,,,,great,assumed,x\n"),              # bad class
+                           ("cp6", "NOPE,Glycine max,Fabaceae,match,direct,,,,low,assumed,x\n")):              # unknown crop -> FK
+            with pytest.raises(Exception):
+                pg.copy_csv(conn, "crop_profile", csv(name + ".csv", head + line))
         with pytest.raises(Exception):   # unknown region -> foreign key
             pg.copy_csv(conn, "power_monthly", csv("m.csv", "region_id,month\nnope,2015-01\n"))
         with pytest.raises(Exception):   # out-of-range value -> CHECK

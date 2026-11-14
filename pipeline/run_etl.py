@@ -19,10 +19,12 @@ from pathlib import Path
 
 import yaml
 
-from src.extractors import appeears_client, chirps, era5_rain, gaez, gaez_grid, gfsad, gibs_ndvi, power_client
+from src.extractors import (appeears_client, chirps, era5_rain, faostat, gaez, gaez_grid, gbif, gfsad, gibs_ndvi,
+                            power_client)
 from src.http_client import HttpError
 from src.models import Region
 from src.transformers import appeears_transform as at
+from src.transformers import crop_profile
 from src.transformers.crop_traits import load_traits, merge_into_dim_crop
 from src.transformers.ndvi_qa import build_series
 from src.transformers import rain_validation as rv
@@ -49,6 +51,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="rain QA with the fixed limit only (no ERA5 reference)")
     ap.add_argument("--skip-chirps", action="store_true",
                     help="skip the CHIRPS rain reference (silver rain_* tables and gold climate.rain_best are not written)")
+    ap.add_argument("--skip-crop-profile", action="store_true",
+                    help="skip GBIF family check and FAOSTAT price/yield (silver crop_profile is not written)")
     ap.add_argument("--skip-gaez-grid", action="store_true", help="skip the Vietnam-wide GAEZ grid (slow: ~45 min)")
     ap.add_argument("--gaez-local-dir", help="folder with already downloaded GAEZ GeoTIFFs (same file names) for the grid")
     ap.add_argument("--no-wait", action="store_true", help="don't wait for AppEEARS tasks to finish")
@@ -210,6 +214,28 @@ def main(argv: list[str] | None = None) -> int:
             if len(rows) < expected:
                 problems.append(f"gaez {region.id}: only {len(rows)}/{expected} values")
         write_dim_crop(silver, merge_into_dim_crop(gaez.crop_dim_rows(gcfg), load_traits(ROOT / "crop_traits.csv")))
+
+    # 4c2) crop profile (DATA-01 part 2): GBIF family, FAOSTAT Viet Nam price/yield, erosion protection class
+    if not args.skip_crop_profile and "crop_profile" in cfg and (silver / "dim_crop.csv").exists():
+        print("== crop profile (GBIF + FAOSTAT)")
+        pcfg = cfg["crop_profile"]
+        traits = load_traits(ROOT / "crop_traits.csv")
+        cmap = crop_profile.load_map(ROOT / "crop_profile_map.csv", known_crops=set(traits))
+        gb = {n: gbif.fetch_family(n, bronze / "gbif", offline=args.offline)
+              for n in sorted({m["scientific_name"] for m in cmap.values()})}
+        prices, yields = faostat.fetch_vn(pcfg["faostat"], bronze / "faostat", offline=args.offline)
+        rows = crop_profile.build_rows(cmap, gb, prices, yields, {c: t.get("family") for c, t in traits.items()}, pcfg)
+        bad = [n for n, g in gb.items() if g is None]
+        if bad:
+            problems.append(f"crop profile: GBIF gave no family for {', '.join(bad)}")
+        if prices is None or yields is None:
+            problems.append("crop profile: FAOSTAT price/yield unavailable (silver crop_profile NOT written)")
+        else:
+            write_csv(silver / "crop_profile.csv", rows)
+            print(f"  [crop-profile] {(silver / 'crop_profile.csv').relative_to(ROOT)}: {len(rows)} crops, "
+                  f"{sum(r['gross_revenue_usd_ha'] is not None for r in rows)} with price and yield, "
+                  f"family: {sum(r['family_check'] == 'match' for r in rows)} match / "
+                  f"{sum(r['family_check'] == 'mismatch' for r in rows)} mismatch")
 
     # 4d) FAO GAEZ on a nationwide grid (DATA-04): any clicked point gets a suitability value
     if not args.skip_gaez_grid and "gaez" in cfg and "gaez_grid" in cfg:
