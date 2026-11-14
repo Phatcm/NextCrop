@@ -34,5 +34,8 @@ View cho app: `v_region_overview` (một dòng mỗi vùng kèm số liệu đ�
 ## R2
 Cấu trúc bucket, manifest và catalog: xem `pipeline/README.md` (mục Cloudflare R2). Bản JSON "gold" (`gold/v<schema>/<vùng>.json`) vẫn được tạo, dùng khi cần xuất file tĩnh hoặc kiểm tra nhanh; không phải đường đọc chính của app.
 
+## Còn thiếu so với hợp đồng gốc
+Bảng cây trồng (mùa trồng, thời gian sinh trưởng, ngưỡng nhiệt, nhu cầu nước, họ đậu, độ phủ đất, giá thị trường, họ thực vật) chưa có trong dữ liệu. Kết quả kiểm tra đầy đủ và các vấn đề độ chính xác: [data-audit.md](data-audit.md).
+
 ## Điều cần chốt (Phat và Hùng)
 Danh sách vùng demo cuối cùng (hiện có 6 vùng, 5 vùng còn là `candidate`); cách app truy cập Postgres (kết nối trực tiếp hay qua API); phiên bản Postgres và nhà cung cấp; có cần `R2_PUBLIC_BASE_URL` cho file tĩnh hay không.
