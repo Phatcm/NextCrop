@@ -19,12 +19,12 @@ from pathlib import Path
 
 import yaml
 
-from src.extractors import (appeears_client, chirps, era5_rain, faostat, gaez, gaez_grid, gbif, gfsad, gibs_ndvi,
-                            power_client)
+from src.extractors import (appeears_client, chirps, era5_rain, faostat, gaez, gaez_env, gaez_grid, gbif, gfsad,
+                            gibs_ndvi, power_client)
 from src.http_client import HttpError
 from src.models import Region
 from src.transformers import appeears_transform as at
-from src.transformers import crop_profile
+from src.transformers import crop_profile, env_inputs, et0
 from src.transformers.crop_traits import load_traits, merge_into_dim_crop
 from src.transformers.ndvi_qa import build_series
 from src.transformers import rain_validation as rv
@@ -49,6 +49,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--skip-gaez", action="store_true", help="skip FAO GAEZ crop suitability")
     ap.add_argument("--skip-rain-crosscheck", action="store_true",
                     help="rain QA with the fixed limit only (no ERA5 reference)")
+    ap.add_argument("--skip-environment", action="store_true",
+                    help="skip slope, soil, crop water demand, ET0 water balance and erosion context (DATA-03)")
     ap.add_argument("--skip-chirps", action="store_true",
                     help="skip the CHIRPS rain reference (silver rain_* tables and gold climate.rain_best are not written)")
     ap.add_argument("--skip-crop-profile", action="store_true",
@@ -259,6 +261,49 @@ def main(argv: list[str] | None = None) -> int:
     lc = at.landcover_by_year(ae_rows["landcover"]) if "landcover" in ae_rows else {}
     dem = at.elevation(ae_rows["dem"]) if "dem" in ae_rows else {}
 
+    # 4e) DATA-03 environment inputs: slope, soil quality, crop water demand (GAEZ windows), ET0 water balance, erosion context
+    env_by: dict[str, dict] = {}
+    if not args.skip_environment and "environment" in cfg and "gaez" in cfg:
+        print("== environment inputs (GAEZ slope / soil / water deficit, ET0 water balance)")
+        ecfg = dict(cfg["environment"])
+        g = cfg["gaez"]
+        ecfg["water_deficit"] = {"period": g["period"], "climate": g["climate"], "ssp": g["ssp"],
+                                 "modes": ecfg.get("water_deficit_modes", ["HILM", "LILM"]),
+                                 "crops": [c["code"] for c in g["crops"]]}
+        ewin, eprob = gaez_env.fetch_windows(ecfg, regions, bronze / "gaez_env", offline=args.offline,
+                                             workers=g.get("workers", 4))
+        problems += [f"gaez-env: {p}" for p in eprob]
+        for region in regions:
+            slope = env_inputs.slope_row(ewin, region)
+            soil = env_inputs.soil_rows(ewin, region)
+            wdc = env_inputs.wdc_rows(ewin, region, ecfg["water_deficit"]["crops"], ecfg["water_deficit"]["modes"])
+            lat, _lon = region.center
+            elev = (dem.get(region.id) or {}).get("median_m") or 0.0
+            rb = (rain_val.get(region.id) or {}).get("monthly") or []
+            balance, calib = [], None
+            if region.id in power_by and rb:
+                dly = et0.daily_et0(power_by[region.id]["daily"]["rows"], lat, elev)
+                mon = et0.monthly_et0(dly)
+                ref_win = ewin.get(("et0", "annual"), {}).get(region.id)
+                ref_vals = env_inputs._valid(ref_win) if ref_win else []
+                ref = round(sum(ref_vals) / len(ref_vals)) if ref_vals else None
+                calib = et0.calibration(et0.annual_totals(mon), ref, **(cfg["environment"].get("et0_calibration") or {}))
+                balance = et0.water_balance(rb, mon, calib["factor"])
+            else:
+                problems.append(f"environment {region.id}: no POWER daily or no rain_monthly_best, water balance skipped")
+            erosion = env_inputs.erosion_row(region, slope, rb, ecfg.get("erosion") or {}) if rb else None
+            for name, ok in (("slope", slope), ("soil", soil), ("water deficit", wdc), ("water balance", balance),
+                             ("erosion", erosion)):
+                if not ok:
+                    problems.append(f"environment {region.id}: no {name}")
+            env_by[region.id] = {"slope": slope, "soil": soil, "wdc": wdc, "balance": balance, "et0": calib,
+                                 "erosion": erosion}
+            print(f"  [env] {region.id}: slope {slope['slope_mean_pct'] if slope else '-'}% (>12%: "
+                  f"{slope['share_gt12_pct'] if slope else '-'}%), soil rows {len(soil)}, wdc rows {len(wdc)}, "
+                  f"balance months {len(balance)}, ET0 factor {calib['factor'] if calib else '-'}"
+                  f"{'' if not calib or calib['applied'] else ' (NOT applied: ' + calib['reason'] + ')'}, "
+                  f"erosion {erosion['base_hazard'] if erosion else '-'}")
+
     # 5) gold per region
     print("== gold")
     for region in regions:
@@ -288,7 +333,7 @@ def main(argv: list[str] | None = None) -> int:
         g = build_region_gold(region, start, end, power=power_by.get(region.id), ndvi=ndvi, smap=sm,
                               landcover=lc.get(region.id), elevation=dem.get(region.id),
                               power_cfg=cfg["power"], rain_removed=rain_removed.get(region.id),
-                              rain_val=rain_val.get(region.id),
+                              rain_val=rain_val.get(region.id), environment=env_by.get(region.id),
                               suitability=gaez.gold_block(cfg["gaez"], gaez_rows.get(region.id, [])) if "gaez" in cfg else None)
         if region.id in gf_stats:
             s = gf_stats[region.id]

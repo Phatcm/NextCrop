@@ -18,6 +18,7 @@ BRONZE_SOURCES = {
     "appeears": "nasa_appeears",
     "gfsad": "usgs_gfsad30seace",
     "gaez": "fao_gaez_v5",
+    "gaez_env": "fao_gaez_v5_environment",
     "era5": "open_meteo_era5",
     "chirps": "chc_chirps_v3",
     "gbif": "gbif_backbone",
@@ -42,6 +43,11 @@ DATASET_KEYS: dict[str, list[str]] = {
     "landcover_by_year": ["region_id", "year"],
     "landcover_classes": ["region_id", "year", "class_name"],
     "terrain": ["region_id"],
+    "terrain_slope": ["region_id"],
+    "soil_quality": ["region_id", "factor", "input_level"],
+    "crop_water_demand": ["region_id", "crop_code", "input_mode"],
+    "water_balance_monthly": ["region_id", "month"],
+    "erosion_context": ["region_id"],
     "vn_grid_monthly": ["lat", "lon", "param", "yyyymm"],
 }
 

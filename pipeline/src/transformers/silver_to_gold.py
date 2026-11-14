@@ -60,7 +60,8 @@ def landcover_check(lc: dict | None, min_cropland: float = 0.5) -> dict | None:
 def build_region_gold(region: Region, start_year: int, end_year: int, *, power: dict | None,
                       ndvi: dict[str, dict], smap: dict | None, landcover: dict | None,
                       elevation: dict | None, power_cfg: dict, suitability: dict | None = None,
-                      rain_removed: dict | None = None, rain_val: dict | None = None) -> dict:
+                      rain_removed: dict | None = None, rain_val: dict | None = None,
+                      environment: dict | None = None) -> dict:
     """ndvi = {source_key: {"description", "qa", "series": [NdviPoint]}}; suitability = gaez.gold_block()."""
     lat, lon = region.center
     lc_check = landcover_check(landcover)
@@ -133,6 +134,21 @@ def build_region_gold(region: Region, start_year: int, end_year: int, *, power: 
         msg = rain_validation.caveat(rain_val["summary"])
         if msg:
             gold["metadata"]["caveats"].append(msg)
+    if environment:
+        gold["environment"] = {
+            "source": "FAO GAEZ v5 (LR-SLC, SQX, RES05-WDC, RES01-ET0), NASA POWER (ET0 inputs), CHIRPS v3 (rain)",
+            "slope": environment.get("slope"), "soil_quality": environment.get("soil"),
+            "water_balance": {"et0_calibration": environment.get("et0"), "monthly": environment.get("balance")},
+            "crop_water_demand": environment.get("wdc"), "erosion_context": environment.get("erosion"),
+            "note": ("Độ dốc, chất lượng đất, nhu cầu nước theo cây là raster GAEZ ~1-10 km: mô tả vùng quanh điểm, không phải "
+                     "một thửa ruộng; xói mòn là mức tương đối, không phải tấn/ha; đạm và thấm nước chưa có dữ liệu trực tiếp "
+                     "(xem data-issues DATA-03)")}
+        er = environment.get("erosion")
+        if er:
+            gold["metadata"]["caveats"].append(
+                f"Xói mòn: độ dốc trung bình {er['slope_mean_pct']}% ({er['share_gt12_pct']}% diện tích dốc >12%), "
+                f"chỉ số xói mòn do mưa {er['mfi']} ({er['mfi_class']}): mức nguy cơ nền '{er['base_hazard']}' là quy tắc "
+                "của dự án, chưa hiệu chuẩn cho Việt Nam.")
     if ndvi:
         gold["ndvi"] = {"primary": primary, "sources": {}}
         for key, src in ndvi.items():
@@ -157,6 +173,17 @@ def write_region(gold_dir: Path, silver_dir: Path, gold: dict, power: dict | Non
         write_csv(silver_dir / "power_monthly.csv", tbl(power["monthly"]["rows"]))
         write_json(gold_dir / f"{rid}_climate_daily.json",
                    {"region_id": rid, "units": power["daily"]["units"], "rows": power["daily"]["rows"]})
+    env = gold.get("environment") or {}
+    if env.get("slope"):
+        write_csv(silver_dir / "terrain_slope.csv", [env["slope"]])
+    if env.get("soil_quality"):
+        write_csv(silver_dir / "soil_quality.csv", env["soil_quality"])
+    if env.get("crop_water_demand"):
+        write_csv(silver_dir / "crop_water_demand.csv", env["crop_water_demand"])
+    if (env.get("water_balance") or {}).get("monthly"):
+        write_csv(silver_dir / "water_balance_monthly.csv", tbl(env["water_balance"]["monthly"]))
+    if env.get("erosion_context"):
+        write_csv(silver_dir / "erosion_context.csv", [env["erosion_context"]])
     rb = (gold.get("climate") or {}).get("rain_best")
     if rb:
         write_csv(silver_dir / "rain_validation.csv", tbl(rb["validation_by_year"]))

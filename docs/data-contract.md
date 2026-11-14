@@ -12,6 +12,11 @@ Nguồn thật là [pipeline/db/migrations/001_init.sql](../pipeline/db/migratio
 | Bảng | Khóa | Nội dung |
 |---|---|---|
 | `dim_region` | `region_id` | vùng demo: bbox, tỉnh, vùng sinh thái, kết quả kiểm tra đất canh tác (MODIS và GFSAD) |
+| `terrain_slope` | `region_id` | tỷ lệ diện tích theo 10 lớp độ dốc (GAEZ), độ dốc trung bình, % diện tích dốc >12% và >24%. Raster ~1 km: vùng quanh điểm |
+| `soil_quality` | `region_id, factor, input_level` | 8 yếu tố chất lượng đất GAEZ (SQ0 hạn chế nhất, SQ1 độ phì, SQ2 giữ dinh dưỡng, SQ3 rễ, SQ4 oxy, SQ5 mặn, SQ6 vôi/thạch cao, SQ7 làm đất), điểm 0–1, mức đầu vào cao (HIM) và thấp (LIM). Không có kết cấu, hữu cơ, thấm nước |
+| `crop_water_demand` | `region_id, crop_code, input_mode` | lượng tưới ròng trong vụ (mm), GAEZ RES05-WDC, chỉ hai mức có tưới. 0 = không thiếu nước theo mô hình; NULL = không có dữ liệu; **không phải tổng nước cây dùng** |
+| `water_balance_monthly` | `region_id, month` | mưa (CHIRPS) − ET0 (mm/tháng). `et0_raw_mm` tính từ POWER theo FAO-56, `et0_mm` đã nhân hệ số để khớp lớp ET0 của GAEZ. ET0 là cây chuẩn, nhân hệ số cây trồng cho từng cây |
+| `erosion_context` | `region_id` | chỉ số Fournier hiệu chỉnh, độ dốc, mức nguy cơ nền thấp/vừa/cao. **Mức tương đối, không phải tấn/ha**; nhân với `crop_profile.erosion_protection` |
 | `crop_profile` | `crop_code` | họ thực vật xác minh qua GBIF; giá, năng suất, doanh thu thô Việt Nam (FAOSTAT, trung bình quốc gia; **không phải lợi nhuận**); lớp chống xói mòn kèm `cover_confidence`. NULL = không có nguồn (taro, cọ dầu, cà chua, dừa); `faostat_match = proxy` là mục thay thế |
 | `dim_crop` | `crop_code` | 24 cây GAEZ, tên tiếng Việt, `name_verified`, đặc tính cây (migration 003, 005): `res02_code`, `gaez_group`, `life_cycle`, `is_legume`, `family`, `cycle_days_min/max`, `min_temp_c`, `water_regime`, nguồn từng nhóm cột. Trống = chưa có nguồn, không đoán |
 | `power_daily`, `power_monthly` | `region_id` + ngày/tháng | khí hậu NASA POWER 2015–2025. Mưa ngày bị ERA5 phủ nhận (nhiễu của POWER) là `NULL` kèm lý do trong `power_daily.prectotcorr_qa` |

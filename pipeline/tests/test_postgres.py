@@ -60,7 +60,8 @@ def test_migrate_copy_and_constraints(tmp_path):
                                                                          "005_crop_water_regime",
                                                                          "006_gaez_grid_cropland",
                                                                          "007_crop_profile",
-                                                                         "008_gaez_suitability_cropland"]
+                                                                         "008_gaez_suitability_cropland",
+                                                                         "009_environment_inputs"]
         assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == []        # idempotent
         conn.run(f"SET search_path TO {pg.SCHEMA}")
 
@@ -132,6 +133,30 @@ def test_migrate_copy_and_constraints(tmp_path):
                            ("cp6", "NOPE,Glycine max,Fabaceae,match,direct,,,,low,assumed,x\n")):              # unknown crop -> FK
             with pytest.raises(Exception):
                 pg.copy_csv(conn, "crop_profile", csv(name + ".csv", head + line))
+        # environment inputs (migration 009)
+        pg.copy_csv(conn, "soil_quality", csv("sq.csv",
+            "region_id,factor,factor_name,input_level,rating_mean,rating_min,rating_max,n_px,n_rated\n"
+            "r1,SQ1,Nutrient availability,LIM,0.95,0.95,0.95,4,2\n"))
+        for name, text in (("sq2", "r1,SQ9,x,LIM,0.5,0.5,0.5,4,2\n"),            # unknown factor
+                           ("sq3", "r1,SQ2,x,LIM,1.5,0.5,0.5,4,2\n"),            # rating above 1
+                           ("sq4", "r1,SQ3,x,LIM,0.5,0.5,0.5,2,4\n")):           # more rated pixels than pixels
+            with pytest.raises(Exception):
+                pg.copy_csv(conn, "soil_quality", csv(name + ".csv",
+                    "region_id,factor,factor_name,input_level,rating_mean,rating_min,rating_max,n_px,n_rated\n" + text))
+        pg.copy_csv(conn, "crop_water_demand", csv("wd.csv",
+            "region_id,crop_code,input_mode,n_px,n_valid,mm_mean,mm_median,mm_max\n"
+            "r1,RCW,HILM,4,4,0.0,0.0,0.0\nr1,MZE,HILM,4,0,,,\n"))
+        with pytest.raises(Exception):   # no valid pixel but a mean (or the reverse) -> CHECK
+            pg.copy_csv(conn, "crop_water_demand", csv("wd2.csv",
+                "region_id,crop_code,input_mode,n_px,n_valid,mm_mean,mm_median,mm_max\nr1,RCW,LILM,4,0,10.0,10.0,10.0\n"))
+        pg.copy_csv(conn, "water_balance_monthly", csv("wb.csv",
+            "region_id,month,rain_mm,et0_raw_mm,et0_mm,balance_mm,rain_source\nr1,2015-01,10.0,100.0,150.0,-140.0,chirps\n"))
+        with pytest.raises(Exception):   # balance must equal rain - et0
+            pg.copy_csv(conn, "water_balance_monthly", csv("wb2.csv",
+                "region_id,month,rain_mm,et0_raw_mm,et0_mm,balance_mm,rain_source\nr1,2015-02,10.0,100.0,150.0,5.0,chirps\n"))
+        with pytest.raises(Exception):   # shares of >24 percent cannot exceed >12 percent
+            pg.copy_csv(conn, "terrain_slope", csv("ts.csv",
+                "region_id,slope_mean_pct,share_gt12_pct,share_gt24_pct,n_px\nr1,10,5,20,100\n"))
         with pytest.raises(Exception):   # unknown region -> foreign key
             pg.copy_csv(conn, "power_monthly", csv("m.csv", "region_id,month\nnope,2015-01\n"))
         with pytest.raises(Exception):   # out-of-range value -> CHECK

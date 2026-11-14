@@ -89,6 +89,17 @@ crop_profile:
     first_year: 2015
     timeout_s: 300
 
+# DATA-03: đầu vào môi trường cho 5 ưu tiên (nước, đất, đạm, xói mòn, thu nhập). Độ dốc, đất, thiếu nước theo cây: GAEZ v5
+# (cùng bucket với gaez); ET0 tính từ POWER theo FAO-56 rồi đối chiếu với lớp ET0 độc lập của GAEZ.
+environment:
+  et0_reference: {period: HP0120, climate: AGERA5, ssp: HIST}
+  water_deficit_modes: [HILM, LILM]      # hai mức có tưới; mức nhờ mưa (HRLM/LRLM) theo định nghĩa không cần tưới
+  et0_calibration: {lo: 0.5, hi: 2.0, min_years: 5}   # hệ số = ET0 GAEZ / ET0 POWER, chỉ áp khi nằm trong [lo, hi]
+  erosion:
+    mfi_bounds: [60, 90, 120, 160]       # chỉ số Fournier hiệu chỉnh: rất thấp / thấp / vừa / cao / rất cao [CHƯA KIỂM CHỨNG nguồn]
+    slope_moderate_share_gt12: 10        # % diện tích dốc >12% để xếp "vừa"
+    slope_high_share_gt12: 40            # ... để xếp "cao" (quy tắc của dự án, chưa hiệu chuẩn)
+
 # Lưới khí hậu cả nước (POWER regional: tối đa 10 độ mỗi chiều, 1 tham số mỗi lần gọi).
 vn_grid:
   boxes:   # [lon_min, lat_min, lon_max, lat_max]
