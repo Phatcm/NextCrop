@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+raw/
+*.tif
+*.part
+.venv/
+venv/
+__pycache__/
+node_modules/
+dist/
+build/
+.DS_Store
+*.log
