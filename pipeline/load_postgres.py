@@ -125,6 +125,26 @@ def validate(conn, counts: dict, catalog: dict, start: int, end: int, cfg: dict 
         rep.check("crop_profile: revenue = price x yield / 1000 (rounded)",
                   scalar(conn, "SELECT count(*) FROM crop_profile WHERE gross_revenue_usd_ha IS NOT NULL "
                                "AND abs(gross_revenue_usd_ha - price_usd_per_t * yield_kg_ha / 1000) > 0.02 * gross_revenue_usd_ha + 1") == 0)
+    if counts.get("terrain_slope"):
+        rep.check("environment: every region has slope, soil quality, water balance and erosion context",
+                  scalar(conn, "SELECT count(*) FROM dim_region r WHERE NOT EXISTS (SELECT 1 FROM terrain_slope s WHERE s.region_id = r.region_id) "
+                               "OR NOT EXISTS (SELECT 1 FROM soil_quality q WHERE q.region_id = r.region_id) "
+                               "OR NOT EXISTS (SELECT 1 FROM water_balance_monthly w WHERE w.region_id = r.region_id) "
+                               "OR NOT EXISTS (SELECT 1 FROM erosion_context e WHERE e.region_id = r.region_id)") == 0)
+        rep.check("environment: slope class shares add up to 100% (+-0.5)",
+                  scalar(conn, "SELECT count(*) FROM terrain_slope WHERE abs(sc01_pct + sc02_pct + sc03_pct + sc04_pct + sc05_pct + "
+                               "sc06_pct + sc07_pct + sc08_pct + sc09_pct + sc10_pct - 100) > 0.5") == 0)
+        rep.check("environment: soil quality has the 8 factors x 2 input levels for every region",
+                  scalar(conn, "SELECT count(*) FROM (SELECT region_id FROM soil_quality GROUP BY 1 HAVING count(*) <> 16) t") == 0)
+        rep.check("environment: crop water demand covers every crop of dim_crop in every region",
+                  scalar(conn, "SELECT count(*) FROM (SELECT region_id FROM crop_water_demand GROUP BY 1 "
+                               "HAVING count(DISTINCT crop_code) <> (SELECT count(*) FROM dim_crop)) t") == 0)
+        rep.check("environment: water balance months match the rain months (one row per region and month, no gaps)",
+                  scalar(conn, "SELECT count(*) FROM rain_monthly_best b WHERE NOT EXISTS (SELECT 1 FROM water_balance_monthly w "
+                               "WHERE w.region_id = b.region_id AND w.month = b.month)") == 0)
+        rep.check("environment: ET0 plausible for the tropics (500-2500 mm/yr)",
+                  scalar(conn, "SELECT count(*) FROM (SELECT region_id, substr(month, 1, 4) y, sum(et0_mm) s FROM water_balance_monthly "
+                               "GROUP BY 1, 2 HAVING count(*) = 12 AND (sum(et0_mm) < 500 OR sum(et0_mm) > 2500)) t") == 0)
     rep.check("dim_crop: annual crops have a cycle length unless GAEZ has no parameters for them",
               scalar(conn, "SELECT count(*) FROM dim_crop WHERE life_cycle = 'annual' AND cycle_days_min IS NULL "
                            "AND traits_source LIKE '%Appendix 4-6 (A4-6.1%'") == 0)

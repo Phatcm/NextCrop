@@ -34,7 +34,7 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 |---|---|---|---|
 | DATA-01 | ~~Nghiêm trọng~~ Đã xử lý phần bảng (còn giá, độ phủ đất, nguồn khuyến nông) | Bảng cây trồng 24 cây đã vào `dim_crop` (PR #4) và đã nạp R2/Neon (14/11) | Hùng + Phát |
 | DATA-02 | ~~Cao~~ Đã xử lý phần sinh phương án (còn nối vào app) | Bộ sinh 4 phương án mức vụ đã có và có test; app chưa gọi nó | Phát |
-| DATA-03 | Cao | Thiếu đầu vào: độ dốc, bốc thoát hơi nước, thấm nước, đất | Phát |
+| DATA-03 | ~~Cao~~ Đã xử lý phần dữ liệu cho 6 vùng (còn thiếu thấm nước, kết cấu đất, Kc, chi phí) | Độ dốc, ET0 và cân bằng nước, đất, nhu cầu tưới theo cây, xói mòn tương đối | Hùng + Phát |
 | DATA-04 | ~~Trung bình~~ Đã xử lý phần GAEZ | Chỉ 6 vùng có đủ dữ liệu (GAEZ đã có cả nước, xem mục 3) | Cả hai |
 | DATA-05 | ~~Cao~~ Đã xử lý (còn 3 ngày dưới ngưỡng và lưới) | Mưa phi lý (691 mm/ngày) lan sang bảng tháng, năm, chuẩn khí hậu | Phát |
 | DATA-06 | ~~Cao~~ Đã xử lý (PR #6, đã nạp R2/Neon) | Mưa POWER lệch tới 2,3 lần (Ninh Thuận) | Phát |
@@ -83,7 +83,17 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - **Cải thiện sau (không chặn):** số ngày sinh trưởng thực tế ở Việt Nam từ tài liệu khuyến nông; lịch thời vụ chính thức theo vùng để đối chiếu `CBD`; giá nông sản; độ phủ đất chống xói mòn.
 - **Xong khi:** mỗi cây hiện tại có ≥3 phương án (gồm giữ nguyên) hoặc có quy tắc sinh ra chúng.
 
-### DATA-03 · Cao · Thiếu đầu vào cho 5 ưu tiên (nước, đất, đạm, xói mòn, thu nhập)
+### DATA-03 · ĐÃ XỬ LÝ phần dữ liệu (14/11/2026, migration 009) · Thiếu đầu vào cho 5 ưu tiên (nước, đất, đạm, xói mòn, thu nhập)
+- **Đã làm (6 vùng, bảng mới, không đụng bảng của Phát):** mọi đầu vào lấy từ bucket GAEZ v5 (cùng bộ đọc cửa sổ HTTP) và từ dữ liệu đã có, không cần nguồn mới:
+  - **Nước:** `water_balance_monthly` = mưa CHIRPS − ET0, tính theo FAO-56 Penman-Monteith từ chính cột POWER (nhiệt độ, độ ẩm, gió, bức xạ). Kiểm chứng với lớp ET0 độc lập của GAEZ: Thái Bình −1%, Sóc Trăng +4%, An Giang +7% nhưng Sơn La −18%, Ninh Thuận −16%, Đắk Lắk −26% (POWER lệch ở vùng núi và khô). Vì vậy `et0_mm` được nhân hệ số từng vùng (0,93–1,35) để trung bình 11 năm khớp GAEZ, giữ nguyên hình dạng theo tháng của POWER; `et0_raw_mm` giữ số gốc. Cân bằng năm: Ninh Thuận −830 mm (thiếu nước), Thái Bình +685. `crop_water_demand`: lượng tưới ròng trong vụ (mm) theo 24 cây và 2 mức có tưới, từ GAEZ `RES05-WDC` (0 = không thiếu nước trong mô hình, NULL = không có dữ liệu; **là nhu cầu tưới, không phải tổng nước cây dùng**).
+  - **Xói mòn:** `terrain_slope` (10 lớp độ dốc GAEZ `LR-SLC`): Sơn La dốc trung bình 34,6% (81% diện tích dốc >12%), Đắk Lắk 8,4%, ba vùng đồng bằng 3–4%. `erosion_context`: chỉ số Fournier hiệu chỉnh từ mưa CHIRPS và mức nguy cơ nền (thấp/vừa/cao). Đây là **mức tương đối, không phải tấn/ha**; thiếu hệ số xói của đất và hệ số phủ cây (app nhân với `crop_profile.erosion_protection`). Chỉ số Fournier ở cả 6 vùng đều ≥142 nên các lớp theo ngưỡng bão hòa và **độ dốc quyết định kết quả**; ngưỡng là quy tắc dự án chưa hiệu chỉnh cho Việt Nam, nguồn ngưỡng Fournier **[CHƯA KIỂM CHỨNG]**.
+  - **Đất:** `soil_quality` (GAEZ `SQX`, 8 yếu tố x 2 mức đầu vào, điểm 0–1): ví dụ Sóc Trăng độ phì 0,06 và nhiễm mặn 0,26 (đúng với bối cảnh lúa-tôm), Sơn La yếu tố hạn chế nhất 0,27. Độ phân giải ~1 km, nền HWSD.
+  - **Đạm:** không có dữ liệu mới; dùng `dim_crop.is_legume` (DATA-01) và `soil_quality` SQ1 (độ phì).
+  - **Thu nhập:** `crop_profile.gross_revenue_usd_ha` (DATA-01 phần 2), doanh thu thô, không phải lợi nhuận.
+- **Vẫn thiếu, ghi rõ trong gold `environment.note`:** thấm nước (không có dữ liệu trực tiếp; SMAP L4 `soil_water_infiltration_flux` là thông lượng của mô hình, không phải khả năng thấm, nên không dùng), kết cấu đất và hữu cơ (GAEZ chỉ cho chỉ số chất lượng), hệ số cây trồng Kc (FAO-56 bị chặn truy cập tự động), đạm thực đo, chi phí sản xuất.
+- **Giới hạn:** raster ~1–10 km mô tả vùng quanh điểm, không phải một thửa; chưa có cho lưới cả nước (mới 6 vùng).
+
+**Ghi chú cũ (trước khi làm):**
 - **Độ dốc / xói mòn:** `terrain` chỉ có độ cao tại 25 điểm/vùng (trung vị, min, max), không đủ tính độ dốc. Cần DEM dạng lưới; **[CHƯA KIỂM CHỨNG]** cách lấy (NASADEM theo vùng).
 - **Bốc thoát hơi nước / cân bằng nước:** POWER **không có `PET`** (gọi trả lỗi 422 **[ĐÃ XÁC NHẬN]**). Có `EVPTRNS` (năng lượng bốc thoát hơi nước) và `EVLAND` **[ĐÃ XÁC NHẬN]**; đơn vị chưa kiểm tra. Hai hướng: thêm hai biến này vào `power.parameters` trong `config.yaml` (nhớ đổi đơn vị), hoặc tính PET kiểu Hargreaves từ `t2m_max`, `t2m_min`, bức xạ rồi cân bằng nước = mưa − PET theo tháng.
 - **Thấm nước:** SMAP L4 `SPL4SMGP.008` có lớp `Geophysical_Data_soil_water_infiltration_flux` trong AppEEARS **[ĐÃ XÁC NHẬN]**; chưa lấy dữ liệu thử. Đây là sản phẩm đồng hóa mô hình, không phải đo vệ tinh thuần.
