@@ -43,6 +43,7 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 | DATA-09 | Trung bình | NDVI nội suy nhiều ở đồng bằng | Phát |
 | DATA-10 | Trung bình | MODIS và GFSAD mâu thuẫn ở Sơn La, Đắk Lắk | Cả hai |
 | DATA-11 | Thấp | GAEZ là tiềm năng, không đơn điệu | Hùng (giao diện) |
+| DATA-18 | Trung bình | GAEZ xếp cà phê thấp (16/24) và cao su 0 điểm ở Đắk Lắk, trái với thực tế: không dùng điểm GAEZ để khuyên bỏ cây lâu năm | Hùng (giao diện, slide) + Phát |
 | DATA-12 | Thấp | Độ phủ thời gian: không có 2026, mốc NDVI trước 2015 | Phát |
 | DATA-13 | Thấp | Đơn vị và ngày tạo chưa có trong Postgres | Phát |
 | DATA-14 | Trung bình | Điểm ngoài Việt Nam (Lào, Campuchia, Trung Quốc) vẫn nhận phương án | Hùng (app) + Phát |
@@ -193,6 +194,14 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 ### DATA-17 · ĐÃ XỬ LÝ (14/11/2026, migration 012) · Đầu vào môi trường (DATA-03) chỉ có cho 6 vùng, app chạy theo ô cả nước
 - **Đã làm:** bảng `grid_environment` (độ dốc, đất theo ô) và `grid_water_demand` (nhu cầu tưới theo ô, cây, mức đầu vào) cho mọi ô nằm trong Việt Nam (`grid_vietnam.in_vietnam`), từ cùng lớp GAEZ và cùng quy tắc với bảng vùng.
 - **Chưa có theo ô:** xói mòn đầy đủ (cần lượng mưa theo ô; lưới mưa cả nước là POWER, lệch tới +126% ở Ninh Thuận) và cân bằng nước ET0. Chỉ có `slope_class`, tức nửa địa hình của quy tắc xói mòn. Doanh thu theo cây không phụ thuộc vị trí (`crop_profile`).
+
+### DATA-18 · Trung bình · GAEZ xếp cà phê và cao su ở Đắk Lắk thấp, trái với thực tế
+- **Bằng chứng [ĐÃ XÁC NHẬN] 14/11/2026** (đối chiếu dữ liệu với số liệu bên ngoài): vùng `dak_lak_coffee` (Buôn Ma Thuột), lớp `RES05-SUX`: cà phê (`COF`) đứng **16/24** khi nhờ mưa, mức cao (HRLM, 3.448/10.000) và **15/24** khi có tưới (HILM, 5.486); ngô 6.752 ở HRLM. Lớp "trung bình cả ô" (`RES05-SXX30AS`) cũng thấp: cà phê 1.349, ngô 2.810. Cao su (`RUB`) 0 điểm, đứng 23/24.
+- **Thực tế bên ngoài:** Đắk Lắk có diện tích cà phê lớn nhất nước, khoảng 204.000–220.000 ha (VietnamPlus, VnExpress, báo Nông nghiệp; số liệu thứ cấp, chưa đối chiếu bảng gốc của Tổng cục Thống kê). Năng suất cà phê của cả nước khoảng 2,7–2,9 t/ha, khớp `crop_profile` (2.895 kg/ha).
+- **Nguyên nhân [ĐÁNH GIÁ, CHƯA KIỂM CHỨNG]:** điểm GAEZ là tiềm năng từ mô hình khí hậu và đất, không phải kết quả canh tác. Mô hình có thể đánh giá thấp cà phê ở vùng có mùa khô dài và coi cao su không thích hợp. Chưa tách được tác động của từng yếu tố.
+- **Hệ quả cho app:** không được dùng điểm GAEZ một mình để khuyên nông dân bỏ cây lâu năm. `v_crop_ranking.rank_annual` đã loại cây lâu năm khỏi xếp hạng luân canh (DATA-15), nên hiện chưa sinh ra khuyến nghị sai, nhưng cột `rank` (tính cả cây lâu năm) vẫn xếp cà phê thấp.
+- **Hướng xử lý:** (a) giao diện: nơi nào hiển thị điểm GAEZ phải ghi "tiềm năng mô hình, không phải thực tế canh tác", và với cây lâu năm đang trồng thì hiển thị "đang trồng" thay vì thứ hạng; (b) slide: dùng ví dụ này như bằng chứng cho việc chúng ta đối chiếu với thực tế; (c) nếu có thời gian: so với bảng gốc của Tổng cục Thống kê (diện tích, năng suất theo tỉnh).
+- **Xong khi:** giao diện có chú thích và không xếp hạng cây lâu năm đang trồng theo điểm GAEZ.
 
 ### DATA-13 · Thấp · Đơn vị và ngày tạo chưa có trong Postgres
 - Đơn vị (°C, mm/ngày, %, m/s, MJ/m²/ngày, m³/m³) chỉ nằm trong JSON gold; bảng Postgres không có. `dim_region` không có ngày tạo (chỉ `pipeline_run.loaded_at`).
