@@ -2,6 +2,8 @@
 
 Danh sách việc còn lại, viết để người tiếp theo (Phát) làm tiếp mà không cần hỏi lại. Chi tiết cuộc kiểm tra: [data-audit.md](data-audit.md). Mô hình dữ liệu: [data-contract.md](data-contract.md). Cấu hình Postgres: [postgres-hosting.md](postgres-hosting.md).
 
+Bảng theo dõi (dễ nhìn hơn): Kan board `fieldshift` https://kan-amber.vercel.app/boards/1oixmltk2mz5 (riêng tư). File này vẫn là nguồn chính; khi cập nhật hãy sửa file này rồi đồng bộ lại lên board.
+
 Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc API thật; **[CHƯA KIỂM CHỨNG]** = đề xuất, chưa thử.
 
 ## 1. Trạng thái hiện tại
@@ -15,7 +17,7 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 **Chưa xong**: bảng cây trồng (DATA-01) và các vấn đề độ chính xác bên dưới.
 
 **Vị trí**
-- Mã: repo `Phatcm/field-shift`; PR #1 đã vào `main`. Nhánh `feat/gaez-national-and-rain-qa` (DATA-04/05) chưa mở PR.
+- Mã: repo `Phatcm/field-shift`; PR #1 và PR #2 (DATA-04/05) đã vào `main`.
 - Dữ liệu sinh ra: `pipeline/data/` trên máy chạy ETL, **không commit**; dựng lại được từ R2 hoặc từ bronze bằng `python run_etl.py --offline`.
 - Database: dự án Neon `tiny-flower-76765987` (tổ chức `org-withered-wave-01543450`, nhánh `production`), schema `field_shift`, đang chứa lần chạy R2 `20261114T030142Z` (xem bảng `pipeline_run`). `DATABASE_URL` (trực tiếp) dùng cho pipeline, `DATABASE_URL_POOLED` cho app. Phát cần được thêm vào tổ chức Neon và tự lấy chuỗi kết nối trong Neon Console.
 - **Bí mật nằm trong `pipeline/.env` chỉ trên máy hiện tại.** Phát cần được cấp riêng (không qua repo hay chat): `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `EARTHDATA_USERNAME`, `EARTHDATA_PASSWORD`, `DATABASE_URL`.
@@ -92,6 +94,7 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 
   Giữ lại vì ERA5 xác nhận: Thái Bình 2024-09-07 (155 mm so với ERA5 144 mm, bão Yagi), 2024-09-10/11 (132/127 mm so với 120 mm), Thái Bình 2022-09-08 (105/59), 2025-07-22 (106/84), Ninh Thuận 2018-11-18 (101/61).
 - **Giới hạn cần nói khi trình bày:** ERA5 cũng là tái phân tích (0,25°), không phải số đo trạm, và có thể bỏ sót mưa đối lưu cục bộ; ba ca "ranh giới" (103–127 mm) có thể là mưa thật mà ERA5 không thấy. Không có số liệu trạm trong dự án để phân xử. Muốn thận trọng hơn: nâng `candidate_mm` lên 150 (chỉ xét ngày thật sự cực đoan) hoặc hạ `min_ratio` xuống 0,3.
+- **Cải thiện sau (đã hoãn, 14/11):** ERA5 chỉ là tái phân tích, chưa phải số đo. Để phân xử 3 ca ranh giới nên đối chiếu thêm nguồn độc lập: **GPM IMERG** (NASA, vệ tinh hiệu chỉnh bằng trạm, nằm trong danh sách nguồn của đề, cần Earthdata; **[CHƯA KIỂM CHỨNG]** cách truy cập) hoặc trạm **NOAA GHCN-Daily** gần 6 vùng (**[CHƯA KIỂM CHỨNG]** có trạm đủ gần và đủ 2015–2025 không). Chỉ cần kiểm khoảng 9 ngày bị loại và vài ngày bị giữ. Cũng nên dùng chuỗi ERA5 đã cache trong `bronze/era5` để làm DATA-06/07 (so tổng mưa năm của POWER với ERA5 cho 6 vùng), không cần tải thêm.
 - **Chưa xử lý:** lưới khí hậu cả nước (`vn_grid_monthly`) là dữ liệu tháng nên không áp được quy tắc theo ngày; ô lưới chứa An Giang vẫn mang số tháng 6/2020 cao bất thường.
 
 ### DATA-06 · Cao · Ninh Thuận 1.961 mm/năm, nhiều khả năng quá cao
