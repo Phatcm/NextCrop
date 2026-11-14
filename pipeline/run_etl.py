@@ -19,7 +19,7 @@ from pathlib import Path
 
 import yaml
 
-from src.extractors import appeears_client, gaez, gaez_grid, gfsad, gibs_ndvi, power_client
+from src.extractors import appeears_client, era5_rain, gaez, gaez_grid, gfsad, gibs_ndvi, power_client
 from src.http_client import HttpError
 from src.models import Region
 from src.transformers import appeears_transform as at
@@ -43,6 +43,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--skip-appeears", action="store_true")
     ap.add_argument("--skip-gfsad", action="store_true")
     ap.add_argument("--skip-gaez", action="store_true", help="skip FAO GAEZ crop suitability")
+    ap.add_argument("--skip-rain-crosscheck", action="store_true",
+                    help="rain QA with the fixed limit only (no ERA5 reference)")
     ap.add_argument("--skip-gaez-grid", action="store_true", help="skip the Vietnam-wide GAEZ grid (slow: ~45 min)")
     ap.add_argument("--gaez-local-dir", help="folder with already downloaded GAEZ GeoTIFFs (same file names) for the grid")
     ap.add_argument("--no-wait", action="store_true", help="don't wait for AppEEARS tasks to finish")
@@ -90,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # 3) per-region POWER + GIBS
     power_by: dict[str, dict] = {}
-    rain_removed: dict[str, list[dict]] = {}
+    rain_removed: dict[str, dict] = {}
     gibs_by: dict[str, list] = {}
     for region in regions:
         print(f"== {region.id} ({region.name})")
@@ -100,13 +102,20 @@ def main(argv: list[str] | None = None) -> int:
                 power_by[region.id] = power_client.fetch_power(cfg["power"], lat, lon, start, end,
                                                                bronze / "power", args.offline)
                 qa = cfg["power"].get("rain_qa") or {}
-                power_by[region.id], removed = apply_rain_qa(
-                    power_by[region.id], qa.get("max_daily_mm", 180.0), qa.get("min_valid_frac", 0.8))
-                rain_removed[region.id] = removed
+                cross = None if args.skip_rain_crosscheck else qa.get("cross_check")
+                ref = era5_rain.fetch_daily(cross, lat, lon, start, end, bronze / "era5", args.offline) if cross else None
+                if cross and ref is None:
+                    problems.append(f"era5 {region.id}: no reference rain, used the fixed limit only")
+                power_by[region.id], removed, kept = apply_rain_qa(
+                    power_by[region.id], qa.get("max_daily_mm", 180.0), qa.get("min_valid_frac", 0.8), ref, cross)
+                rain_removed[region.id] = {"removed": removed, "kept": kept, "reference": "ERA5" if ref else None}
                 p = power_by[region.id]
                 print(f"  [power] {len(p['daily']['rows'])} days, {len(p['monthly']['rows'])} months"
-                      + (f"; rain QA removed {len(removed)} day(s): "
-                         + ", ".join(f"{d['date']}={d['value_mm']:.0f}mm" for d in removed) if removed else ""))
+                      + (f"; rain QA ({'ERA5' if ref else 'fixed limit'}) removed {len(removed)}: "
+                         + ", ".join(f"{d['date']}={d['value_mm']:.0f}mm" + (f"(ERA5 {d['era5_mm']:.0f})" if d['era5_mm'] is not None else "")
+                                     for d in removed) if removed else f"; rain QA ({'ERA5' if ref else 'fixed limit'}): nothing removed")
+                      + (f"; kept after cross-check: " + ", ".join(f"{d['date']}={d['value_mm']:.0f}mm(ERA5 {d['era5_mm']:.0f})"
+                                                                  for d in kept) if kept else ""))
             except HttpError as e:
                 problems.append(f"power {region.id}: {e}")
                 print(f"  [power] FAILED: {e}")

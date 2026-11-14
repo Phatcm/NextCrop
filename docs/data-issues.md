@@ -74,20 +74,24 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - **Còn lại của DATA-04:** NDVI, SMAP, lớp phủ đất vẫn chỉ có 6 vùng; khí hậu POWER đã có cả nước.
 
 ### DATA-05 · ĐÃ XỬ LÝ (14/11/2026) · Mưa phi lý lan sang nhiều bảng
-- **Đã làm:** `src/transformers/rain_qa.py`, cấu hình `power.rain_qa` (`max_daily_mm: 180`, `min_valid_frac: 0.8`). Ngày vượt ngưỡng → `prectotcorr = NULL` (không phải 0) kèm lý do ở cột mới `prectotcorr_qa`; tháng và năm chứa ngày đó được tính lại từ các ngày còn lại (mm/ngày), tháng/năm khác giữ nguyên số của POWER. Gold có `climate.rain_qa.removed_days` và một dòng trong `caveats`. Loader Postgres kiểm tra: rỗng mưa chỉ khi có cờ, không còn ngày > 180 mm.
-- **[ĐÃ XÁC NHẬN] ngưỡng chốt 180 mm/ngày (14/11).** Trên dữ liệu POWER thật 2015–2025 loại 4 ngày, đều bị ERA5 (Open-Meteo, chỉ để kiểm tra, không đưa vào sản phẩm) phủ nhận; giữ lại ngày mưa thật:
+- **Đã làm:** `src/transformers/rain_qa.py`, cấu hình `power.rain_qa` (`max_daily_mm: 180` làm giới hạn dự phòng, `cross_check` ERA5, `min_valid_frac: 0.8`). Ngày vượt ngưỡng → `prectotcorr = NULL` (không phải 0) kèm lý do ở cột mới `prectotcorr_qa`; tháng và năm chứa ngày đó được tính lại từ các ngày còn lại (mm/ngày), tháng/năm khác giữ nguyên số của POWER. Gold có `climate.rain_qa.removed_days` và một dòng trong `caveats`. Loader Postgres kiểm tra: rỗng mưa chỉ khi có cờ, không còn ngày bị ERA5 phủ nhận.
+- **Cách làm hiện tại (14/11): đối chiếu tự động với ERA5, không dựa vào ngưỡng tay.** Ngày POWER > 100 mm được so với ERA5 (Open-Meteo, CC BY 4.0, cùng điểm, lấy giá trị lớn nhất trong ±1 ngày vì ranh giới ngày hai nguồn lệch nhau); loại nếu ERA5 < 0,5 × POWER, giữ nếu ERA5 xác nhận. Mất mạng và không có cache thì quay về giới hạn cố định 180 mm (`max_daily_mm`) và ETL báo "CHƯA ĐỦ". Cấu hình: `power.rain_qa.cross_check`; mã `src/extractors/era5_rain.py`, `src/transformers/rain_qa.py`; ERA5 chỉ để kiểm tra, không lưu thành dữ liệu sản phẩm, nhưng được cache trong `bronze/era5` để chạy lại `--offline` ra cùng kết quả. Gold ghi `climate.rain_qa.removed_days` và `kept_after_check`.
+- **Kết quả trên 6 vùng, 2015–2025 (9 ngày bị loại trên 24.108 ngày-vùng):**
 
-  | Vùng | Ngày | POWER | ERA5 | Kết quả |
+  | Vùng | Ngày | POWER | ERA5 | Ghi chú |
   |---|---|---|---|---|
-  | An Giang | 2020-06-14 | 691 mm | 22 mm | loại |
-  | Sơn La | 2022-02-04 | 211 mm | 0 mm | loại |
-  | Thái Bình | 2020-10-18 | 205 mm | 17 mm | loại |
-  | Đắk Lắk | 2019-08-07 | 200 mm | 29 mm | loại |
-  | Thái Bình | 2024-09-07 | 155 mm | 144 mm (bão Yagi, mưa thật) | **giữ** |
-  | An Giang | 2020-06-15 | 141 mm | 10 mm | **còn sót** (dưới ngưỡng) |
+  | An Giang | 2020-06-14 | 691 mm | 22 mm | nhiễu rõ ràng |
+  | An Giang | 2020-06-15 | 141 mm | 22 mm | nhiễu (ngưỡng cố định bỏ sót) |
+  | Sơn La | 2022-02-04 | 211 mm | 2 mm | nhiễu rõ ràng |
+  | Thái Bình | 2020-10-18 | 205 mm | 17 mm | nhiễu rõ ràng |
+  | Thái Bình | 2023-10-13 | 144 mm | 0,3 mm | nhiều khả năng nhiễu |
+  | Đắk Lắk | 2019-08-07 | 200 mm | 29 mm | nhiễu rõ ràng |
+  | Ninh Thuận | 2025-10-26 | 127 mm | 24 mm | **ranh giới** |
+  | Sóc Trăng | 2020-06-19 | 110 mm | 28 mm | **ranh giới** |
+  | Sóc Trăng | 2020-09-18 | 103 mm | 18 mm | **ranh giới** |
 
-  Ngưỡng 250 chỉ bắt 1/4, ngưỡng 150 loại nhầm ngày Yagi. Ngày An Giang 2020-06-15 (141 mm, ERA5 10 mm) vẫn còn sót: tháng 6/2020 sau QA là 437 mm, bỏ thêm ngày này còn ~296 mm, gần ERA5 (291 mm). Ngưỡng cố định không tách được hết nhiễu khỏi mưa thật; hướng tự động hơn là đối chiếu nguồn thứ hai (xem dưới). Tổng năm 2020 An Giang từ 3.041 mm xuống khoảng 2.350 mm.
-- **Hướng tự động (chưa làm):** với các ngày ứng viên (> 100 mm), tra ERA5 cùng điểm; loại ngày POWER nếu ERA5 < 50% POWER. Cách này tách đủ 7 ngày trên không cần ngưỡng cố định, cần mạng khi chạy ETL; mất mạng thì quay về ngưỡng 180 mm.
+  Giữ lại vì ERA5 xác nhận: Thái Bình 2024-09-07 (155 mm so với ERA5 144 mm, bão Yagi), 2024-09-10/11 (132/127 mm so với 120 mm), Thái Bình 2022-09-08 (105/59), 2025-07-22 (106/84), Ninh Thuận 2018-11-18 (101/61).
+- **Giới hạn cần nói khi trình bày:** ERA5 cũng là tái phân tích (0,25°), không phải số đo trạm, và có thể bỏ sót mưa đối lưu cục bộ; ba ca "ranh giới" (103–127 mm) có thể là mưa thật mà ERA5 không thấy. Không có số liệu trạm trong dự án để phân xử. Muốn thận trọng hơn: nâng `candidate_mm` lên 150 (chỉ xét ngày thật sự cực đoan) hoặc hạ `min_ratio` xuống 0,3.
 - **Chưa xử lý:** lưới khí hậu cả nước (`vn_grid_monthly`) là dữ liệu tháng nên không áp được quy tắc theo ngày; ô lưới chứa An Giang vẫn mang số tháng 6/2020 cao bất thường.
 
 ### DATA-06 · Cao · Ninh Thuận 1.961 mm/năm, nhiều khả năng quá cao

@@ -18,6 +18,7 @@ BRONZE_SOURCES = {
     "appeears": "nasa_appeears",
     "gfsad": "usgs_gfsad30seace",
     "gaez": "fao_gaez_v5",
+    "era5": "open_meteo_era5",
 }
 
 # Natural (primary) key of every silver dataset. Uploads are blocked if a key is not unique.

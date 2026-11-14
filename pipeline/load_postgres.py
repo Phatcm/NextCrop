@@ -96,9 +96,9 @@ def validate(conn, counts: dict, catalog: dict, start: int, end: int, cfg: dict 
     rep.check("power_daily: no NULL t2m, and NULL rain only where the rain QA rule removed the day (never 0)",
               scalar(conn, "SELECT count(*) FROM power_daily WHERE t2m IS NULL "
                            "OR (prectotcorr IS NULL AND prectotcorr_qa IS NULL)") == 0)
-    limit = float(((cfg or {}).get("power", {}).get("rain_qa") or {}).get("max_daily_mm", 180))
-    rep.check(f"power_daily: no rain above the QA limit survives ({limit:g} mm/day)",
-              scalar(conn, f"SELECT count(*) FROM power_daily WHERE prectotcorr > {limit}") == 0)
+    # days above the fixed limit may survive on purpose when ERA5 confirmed them (typhoons), so the bound is physical
+    rep.check("power_daily: no rain above 1000 mm/day (physical sanity bound)",
+              scalar(conn, "SELECT count(*) FROM power_daily WHERE prectotcorr > 1000") == 0)
     rep.check("power_daily: t2m in [-10, 45] C", scalar(conn, "SELECT count(*) FROM power_daily WHERE t2m NOT BETWEEN -10 AND 45") == 0)
     rep.check("every region has NDVI from its primary source",
               scalar(conn, "SELECT count(*) FROM dim_region r WHERE r.ndvi_primary IS NOT NULL AND NOT EXISTS "

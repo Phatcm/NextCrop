@@ -58,7 +58,7 @@ def landcover_check(lc: dict | None, min_cropland: float = 0.5) -> dict | None:
 def build_region_gold(region: Region, start_year: int, end_year: int, *, power: dict | None,
                       ndvi: dict[str, dict], smap: dict | None, landcover: dict | None,
                       elevation: dict | None, power_cfg: dict, suitability: dict | None = None,
-                      rain_removed: list[dict] | None = None) -> dict:
+                      rain_removed: dict | None = None) -> dict:
     """ndvi = {source_key: {"description", "qa", "series": [NdviPoint]}}; suitability = gaez.gold_block()."""
     lat, lon = region.center
     lc_check = landcover_check(landcover)
@@ -112,14 +112,19 @@ def build_region_gold(region: Region, start_year: int, end_year: int, *, power: 
         }
         if rain_removed is not None:
             qa = power_cfg.get("rain_qa") or {}
+            removed, kept = rain_removed["removed"], rain_removed["kept"]
+            if rain_removed["reference"]:
+                rule = (f"Ngày POWER > {qa['cross_check']['candidate_mm']:g} mm được đối chiếu với ERA5 (Open-Meteo); "
+                        f"loại nếu ERA5 < {qa['cross_check']['min_ratio']:g} x POWER, giữ nếu ERA5 xác nhận")
+            else:
+                rule = f"Không có ERA5: ngày PRECTOTCORR > {qa.get('max_daily_mm', 180.0):g} mm bị đặt NULL"
             gold["climate"]["rain_qa"] = {
-                "rule": f"PRECTOTCORR ngày > {qa.get('max_daily_mm', 180.0):g} mm bị đặt NULL; tháng/năm có ngày đó "
-                        "được tính lại từ các ngày còn lại (mm/ngày)",
-                "removed_days": rain_removed}
-            if rain_removed:
+                "rule": rule + "; tháng/năm có ngày bị loại được tính lại từ các ngày còn lại (mm/ngày)",
+                "reference": rain_removed["reference"], "removed_days": removed, "kept_after_check": kept}
+            if removed:
                 gold["metadata"]["caveats"].append(
-                    f"Mưa: đã loại {len(rain_removed)} ngày POWER có giá trị phi lý (" + ", ".join(
-                        f"{d['date']} = {d['value_mm']:.0f} mm" for d in rain_removed) + ").")
+                    f"Mưa: đã loại {len(removed)} ngày POWER không được ERA5 xác nhận (" + ", ".join(
+                        f"{d['date']} = {d['value_mm']:.0f} mm" for d in removed) + ").")
     if ndvi:
         gold["ndvi"] = {"primary": primary, "sources": {}}
         for key, src in ndvi.items():
