@@ -1,6 +1,6 @@
 """Rotation options for a point and a current crop (DATA-02): the four season-level templates.
 
-Reads dim_crop and the GAEZ grid from data/silver (default) and prints JSON. Nearest grid cell within 0.1 deg
+Reads dim_crop and the GAEZ grid from data/silver (default) and prints JSON. Nearest grid cell within 0.05 deg
 of the point is used; outside that range there is no answer (the point is not on the Vietnam grid).
 
 Usage (from pipeline/):
@@ -42,7 +42,7 @@ def load_silver(silver: Path) -> dict[str, dict]:
         return {r["crop_code"]: _to_crop(r) for r in csv.DictReader(f)}
 
 
-def nearest_cell(silver: Path, lat: float, lon: float, mode: str, max_deg: float = 0.1) -> tuple[dict, tuple[float, float]] | None:
+def nearest_cell(silver: Path, lat: float, lon: float, mode: str, max_deg: float = 0.05) -> tuple[dict, tuple[float, float]] | None:
     """({crop_code: index}, (cell_lat, cell_lon)) of the nearest grid cell, or None if farther than max_deg."""
     best, best_d, cells = None, None, {}
     with open(silver / "gaez_grid.csv", encoding="utf-8-sig", newline="") as f:
@@ -79,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     cell = nearest_cell(silver, args.lat, args.lon, args.mode)
     if cell is None:
-        print("no GAEZ grid cell within 0.1 deg: the point is outside the Vietnam grid", file=sys.stderr)
+        print("no GAEZ grid cell within 0.05 deg: the point is outside the Vietnam grid", file=sys.stderr)
         return 3
     suit, (la, lo) = cell
     try:

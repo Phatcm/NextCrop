@@ -41,7 +41,8 @@ GAP_SOURCES = {
 INDEX_SOURCE = ("Ranh giới lớp 'phù hợp trung bình' của FAO GAEZ v5 (40–60% năng suất tối đa); dưới ngưỡng này FAO "
                 "ghi 'thương mại không khả thi'. Chỉ số ô là trung bình có trọng số theo lớp nên chỉ xấp xỉ "
                 "(GAEZ v5 wiki, Module V).")
-GAEZ_SOURCE = "FAO GAEZ v5 RES05-SXX30AS, 2001-2020, AgERA5, historical; cell mean of ~0.9 km pixels"
+GAEZ_SOURCE = ("FAO GAEZ v5 RES05-SUX, 2001-2020, AgERA5, historical; average suitability index of current cropland, "
+               "5 arc-minute cell (~9 km), better part of the cell in proportion to its cropland share")
 # FAO GAEZ v5 suitability classes (wiki, Module V) on the project's 0-10000 index. Returned in every result so the
 # interface can show it next to the index floor the user is choosing.
 INDEX_CLASS_TABLE = [

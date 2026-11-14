@@ -140,9 +140,9 @@ def validate(conn, counts: dict, catalog: dict, start: int, end: int, cfg: dict 
         if counts.get("gaez_grid"):
             rep.check("gaez_grid: every crop of dim_crop appears in the grid",
                       scalar(conn, "SELECT count(DISTINCT crop_code) FROM gaez_grid") == scalar(conn, "SELECT count(*) FROM dim_crop"))
-            rep.check("gaez_grid: every demo region centre has a grid cell within 0.1 deg",
+            rep.check("gaez_grid: every demo region centre has a grid cell within 0.05 deg",
                       scalar(conn, "SELECT count(*) FROM dim_region r WHERE NOT EXISTS (SELECT 1 FROM gaez_grid g "
-                                   "WHERE abs(g.lat - r.center_lat) <= 0.1 AND abs(g.lon - r.center_lon) <= 0.1)") == 0)
+                                   "WHERE abs(g.lat - r.center_lat) <= 0.05 AND abs(g.lon - r.center_lon) <= 0.05)") == 0)
         rep.check("gaez: rows with n_valid = 0 have no value",
                   scalar(conn, "SELECT count(*) FROM gaez_suitability WHERE n_valid = 0 AND value_mean IS NOT NULL") == 0)
     return rep

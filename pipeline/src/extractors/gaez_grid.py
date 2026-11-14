@@ -1,12 +1,17 @@
-"""FAO GAEZ v5 suitability on a nationwide grid (DATA-04).
+"""FAO GAEZ v5 suitability on a nationwide grid, current-cropland version (DATA-04).
 
-The per-region extractor (gaez.py) only covers the 6 demo bboxes. This one reads the same files
-(RES05-SXX30AS, ~0.9 km) for ALL of Vietnam and averages them into square cells of `cell_deg`
-degrees (default 0.1 deg ~ 11 km), so any clicked point has a suitability value for every crop and
-input level. Each cell = mean of the valid ~0.9 km pixels inside it (nodata -9 excluded, never 0).
+Layer RES05-SUX: average suitability index of CURRENT CROPLAND for each 5 arc-minute cell (~9 km). Following the
+GAEZ v5 documentation (Module V), the cropland maps assume farmers use the better part of the suitability
+distribution of a cell, in proportion to the cropland share. It is read as delivered: no aggregation.
 
-Only the bbox window of each file is read (HTTP range requests); the per-file result is a small
-2-D grid cached in bronze/gaez/grid_<cell>/..., so the run can be replayed offline.
+It replaces the earlier version, the total-cell average of RES05-SXX30AS aggregated into 0.1 deg cells. That one
+includes forest and steep land, which pulls hilly cells far down (Son La maize 282-1185 instead of 1728-2485,
+and 55% of the cells had no annual crop at 4000 or more against 9% now); flat deltas barely differ. The per-region
+extractor (gaez.py) still uses RES05-SXX30AS for the 6 demo bboxes.
+
+The SUX index can reach 10000 in good cells, so crops can tie at the top: do not read small differences there.
+The per-file result is a small 2-D grid cached in bronze/gaez/grid_sux_5arcmin/..., so the run can be replayed
+offline.
 """
 from __future__ import annotations
 
@@ -15,47 +20,45 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from src.extractors.gaez import DEFAULT_NODATA, file_url
+from src.extractors.gaez import DEFAULT_NODATA
 from src.geotiff import GeoTiff
 
-NO_DATA = -1   # marker in the cached grid: the cell has no valid pixel (sea, nodata)
+LAYER = "RES05-SUX"
+BASE_URL = f"https://storage.googleapis.com/fao-gismgr-gaez-v5-data/DATA/GAEZ-V5/MAPSET/{LAYER}"
+NO_DATA = -1   # marker in the cached grid: the cell has no valid value (sea, nodata)
+
+
+def file_name(gcfg: dict, crop: str, mode: str) -> str:
+    return f"GAEZ-V5.{LAYER}.{gcfg['period']}.{gcfg['climate']}.{gcfg['ssp']}.{crop}.{mode}.tif"
+
+
+def file_url(gcfg: dict, crop: str, mode: str) -> str:
+    return f"{BASE_URL}/{file_name(gcfg, crop, mode)}"
 
 
 def cache_path(gcfg: dict, grid_cfg: dict, bronze_dir: Path, crop: str, mode: str) -> Path:
-    cell = f"{grid_cfg['cell_deg']:g}"
-    return (bronze_dir / f"grid_{cell}deg" / f"{gcfg['period']}.{gcfg['climate']}.{gcfg['ssp']}" /
+    return (bronze_dir / "grid_sux_5arcmin" / f"{gcfg['period']}.{gcfg['climate']}.{gcfg['ssp']}" /
             f"{crop}_{mode}.json")
 
 
-def block_means(arr, nodata: int, block: int):
-    """Mean of valid pixels per block x block cell, rounded to int; NO_DATA where no valid pixel."""
+def clean(arr, nodata: int):
+    """Integer grid with NO_DATA wherever the value is the file's nodata or negative. A real 0 stays 0
+    (unsuitable), it is never confused with missing."""
     import numpy as np
-    h, w = arr.shape
-    if h % block or w % block:
-        raise ValueError(f"window {h}x{w} px is not a multiple of {block} px: bbox must align to cell_deg")
     a = arr.astype(np.int64)
-    valid = (a != nodata) & (a >= 0)
-    shape = (h // block, block, w // block, block)
-    total = np.where(valid, a, 0).reshape(shape).sum(axis=(1, 3))
-    count = valid.reshape(shape).sum(axis=(1, 3))
-    return np.where(count > 0, np.rint(total / np.maximum(count, 1)), NO_DATA).astype(int)
+    return np.where((a == nodata) | (a < 0), NO_DATA, a).astype(int)
 
 
 def read_grid(url: str, grid_cfg: dict) -> dict:
     gt = GeoTiff(url)
-    cell = float(grid_cfg["cell_deg"])
-    block = round(cell / gt.dx)
-    if abs(block * gt.dx - cell) > 1e-6:
-        raise ValueError(f"cell_deg {cell} is not a whole number of {gt.dx:.6f} deg pixels")
     arr, bounds = gt.window_with_bounds(*grid_cfg["bbox"])
     nodata = gt.nodata if gt.nodata is not None else DEFAULT_NODATA
-    return {"bounds": [round(b, 6) for b in bounds], "cell_deg": cell, "block_px": block,
-            "shape": list(arr.shape), "nodata": nodata,
-            "means": block_means(arr, nodata, block).tolist()}
+    return {"layer": LAYER, "bounds": [round(b, 6) for b in bounds], "cell_deg": gt.dx,
+            "shape": list(arr.shape), "nodata": nodata, "values": clean(arr, nodata).tolist()}
 
 
 def _fresh(entry: dict | None, grid_cfg: dict) -> bool:
-    return bool(entry) and entry.get("cell_deg") == float(grid_cfg["cell_deg"]) and \
+    return bool(entry) and entry.get("layer") == LAYER and \
         entry.get("request_bbox") == [round(float(v), 6) for v in grid_cfg["bbox"]]
 
 
@@ -63,8 +66,8 @@ def fetch_grids(gcfg: dict, grid_cfg: dict, bronze_dir: Path, *, offline: bool =
                 workers: int = 4, local_dir: Path | None = None, log=print) -> tuple[dict, list[str]]:
     """{(crop, mode): cached_grid}. Missing grids are read from the bucket and cached.
 
-    local_dir: folder with already downloaded GAEZ GeoTIFFs (same file names, covering the bbox).
-    Used instead of the network when the file is there: ~0.1 s per file instead of ~2 min."""
+    local_dir: folder with already downloaded RES05-SUX GeoTIFFs (same file names, covering the bbox).
+    Used instead of the network when the file is there."""
     jobs = [(c["code"], m) for c in gcfg["crops"] for m in gcfg["modes"]]
 
     def one(job):
@@ -73,14 +76,14 @@ def fetch_grids(gcfg: dict, grid_cfg: dict, bronze_dir: Path, *, offline: bool =
         entry = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
         if not _fresh(entry, grid_cfg):
             url = file_url(gcfg, crop, mode)
-            local = local_dir / url.rsplit("/", 1)[-1] if local_dir else None
+            local = local_dir / file_name(gcfg, crop, mode) if local_dir else None
             local = local if local and local.exists() else None
             if offline and not local:                      # a local file needs no network, so it is allowed offline
                 return job, None, f"{crop}/{mode}: not cached (offline)"
             try:
                 entry = read_grid(str(local) if local else url, grid_cfg)
-                entry.update({"source": "FAO GAEZ v5 RES05-SXX30AS", "url": url,
-                              "request_bbox": [round(float(v), 6) for v in grid_cfg["bbox"]],
+                entry.update({"source": f"FAO GAEZ v5 {LAYER} (average suitability index of current cropland)",
+                              "url": url, "request_bbox": [round(float(v), 6) for v in grid_cfg["bbox"]],
                               "fetched_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")})
                 path.parent.mkdir(parents=True, exist_ok=True)
                 tmp = path.with_suffix(".part")
@@ -103,12 +106,12 @@ def fetch_grids(gcfg: dict, grid_cfg: dict, bronze_dir: Path, *, offline: bool =
 
 def build_rows(gcfg: dict, grids: dict) -> list[dict]:
     """Wide rows {lat, lon, crop_code, hilm, hrlm, lilm, lrlm}: one per cell x crop that has at least
-    one valid mode. A mode without data is empty (NULL), never 0."""
+    one valid mode. A mode without data is empty (NULL), never 0. lat/lon are cell centres (4 decimals)."""
     cells: dict[tuple[float, float, str], dict] = {}
     for (crop, mode), g in sorted(grids.items()):
         x0, _y0, _x1, y1 = g["bounds"]
         step = g["cell_deg"]
-        for i, row in enumerate(g["means"]):
+        for i, row in enumerate(g["values"]):
             lat = round(y1 - (i + 0.5) * step, 4)
             for j, v in enumerate(row):
                 if v == NO_DATA:

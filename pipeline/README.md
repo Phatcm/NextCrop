@@ -19,7 +19,8 @@ NASA / FAO  ->  bronze (dữ liệu gốc)  ->  silver (bảng phẳng, có khó
 | NASA SMAP SPL3SMP_E (AppEEARS) | độ ẩm đất đo bằng vệ tinh, 9 km | Earthdata | `appeears_client.py` |
 | MODIS MCD12Q1, NASADEM (AppEEARS) | lớp phủ đất theo năm, độ cao | Earthdata | `appeears_client.py` |
 | NASA GFSAD30SEACE | mặt nạ đất canh tác 30 m (2015), lọc điểm MODIS "thuần ruộng" | Earthdata (qua `urs.earthdata.nasa.gov`) | `gfsad.py` |
-| FAO GAEZ v5 `RES05-SXX30AS` | mức thích hợp của 24 cây x 4 mức đầu vào (0–10000) | bucket Google Cloud Storage công khai | `gaez.py` (đọc cửa sổ qua HTTP, không tải file 150 MB) |
+| FAO GAEZ v5 `RES05-SXX30AS` | mức thích hợp (trung bình cả ô, ~0,9 km) của 24 cây x 4 mức đầu vào (0–10000), 6 vùng demo | bucket Google Cloud Storage công khai | `gaez.py` (đọc cửa sổ qua HTTP, không tải file 150 MB) |
+| FAO GAEZ v5 `RES05-SUX` | mức thích hợp trên **đất canh tác** (phần tốt nhất của ô), lưới gốc 5 phút cung ~9 km, cả nước | cùng bucket | `gaez_grid.py` (bảng `gaez_grid`) |
 | NASA GIBS | NDVI ảnh màu 2023–2025, chỉ dự phòng/đối chiếu | công khai | `gibs_ndvi.py` |
 
 Chi tiết lớp GAEZ, mã cây và cách đối chiếu: [../docs/gaez-notes.md](../docs/gaez-notes.md). Mô hình dữ liệu: [../docs/data-contract.md](../docs/data-contract.md).

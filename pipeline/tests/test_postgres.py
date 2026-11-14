@@ -57,7 +57,8 @@ def test_migrate_copy_and_constraints(tmp_path):
         assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == ["001_init", "002_gaez_grid_rain_qa",
                                                                          "003_crop_traits",
                                                                          "004_rain_validation",
-                                                                         "005_crop_water_regime"]
+                                                                         "005_crop_water_regime",
+                                                                         "006_gaez_grid_cropland"]
         assert pg.migrate(conn, MIGRATIONS, log=lambda *_: None) == []        # idempotent
         conn.run(f"SET search_path TO {pg.SCHEMA}")
 
