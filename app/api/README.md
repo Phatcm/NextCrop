@@ -1,4 +1,4 @@
-# app/api: backend chỉ đọc cho Field Shift
+# app/api: backend chỉ đọc cho NextCrop
 
 FastAPI đọc dữ liệu thật từ PostgreSQL (schema `field_shift`, do `pipeline/load_postgres.py` nạp) và gọi bộ sinh phương án luân canh `pipeline/src/rotation`. **Không ghi dữ liệu, không gọi API NASA/FAO.**
 

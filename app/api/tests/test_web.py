@@ -22,7 +22,7 @@ def test_the_ui_folder_is_found():
 def test_index_is_served_at_the_root(client):
     r = client.get("/")
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
-    assert "Field Shift" in r.text and 'src="js/app.js"' in r.text
+    assert "NextCrop" in r.text and 'src="js/app.js"' in r.text
 
 
 def test_scripts_have_a_javascript_mime_type_or_browsers_refuse_modules(client):
@@ -54,3 +54,8 @@ def test_unknown_paths_are_404_and_nothing_outside_web_is_reachable(client):
 
 def test_static_files_are_get_only(client):
     assert client.post("/index.html").status_code in (404, 405)
+
+
+def test_favicon_is_an_svg(client):
+    r = client.get("/favicon.svg")
+    assert r.status_code == 200 and "svg" in r.headers["content-type"] and "<svg" in r.text

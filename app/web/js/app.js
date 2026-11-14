@@ -1,4 +1,4 @@
-// Field Shift UI: form on the left, satellite map with the 5 arc-minute data cells, results from /api.
+// NextCrop UI: form on the left, satellite map with the 5 arc-minute data cells, results from /api.
 import * as api from "./api.js";
 import {
   CLASSES, STEP, classOf, findProvince, provinceBounds, provinceCentroid, expandBounds, cellOf, cellRing,
@@ -15,7 +15,6 @@ const st = {
   ...EXAMPLE, move: null, hide: new Set(), tab: "res", confirmed: false, outside: false,
   crops: [], features: null, result: null, error: null, loading: false, cells: [],
   layerState: "idle",                                          // idle | loading | ready | empty | error (the cell layer)
-  flash: "",                                                   // short message in the summary card
   navSeq: 0,                                                   // a newer navigation cancels an older, slower one
 };
 let map, mapReady = false, pin;
@@ -79,26 +78,16 @@ function initMap() {
     map.addLayer({ id: "prov-sel", type: "line", source: "prov", filter: selFilter(), paint: { "line-color": "#ffd84d", "line-width": 3.5 } });
     pin = new maplibregl.Marker({ color: "#e8803a" }).setLngLat([st.lon, st.lat]).addTo(map);
     map.getCanvas().style.cursor = "crosshair";
-    map.on("click", (e) => pickPoint(e.lngLat.lat, e.lngLat.lng, "ease"));
+    map.on("click", (e) => {
+      if (swallowMapClick) { swallowMapClick = false; return; }  // this click only closed a popover
+      pickPoint(e.lngLat.lat, e.lngLat.lng, "ease");
+    });
     mapReady = true;
     drawCells();
     moveMap();
   });
 }
-/** Hidden class levels are easy to forget (the card with the ticks only shows in detail mode), so say it on the map. */
-function renderMapHint() {
-  const n = st.hide.size, el = $("maphint");
-  el.hidden = n === 0;
-  if (n) el.innerHTML = `Đang ẩn ${n} mức màu trên bản đồ <button type="button" data-showall>Hiện tất cả</button>`;
-}
-let flashTimer;
-function flash(msg) {
-  st.flash = msg; renderCard();
-  clearTimeout(flashTimer);
-  flashTimer = setTimeout(() => { st.flash = ""; renderCard(); }, 3500);
-}
 function drawCells() {
-  renderMapHint();
   if (!mapReady) return;
   const centre = cellOf(st.lat, st.lon);
   const isCentre = (c) => c.i === centre.i && c.j === centre.j;
@@ -111,13 +100,22 @@ function drawCells() {
   map.setFilter("prov-sel", selFilter());
   pin.setLngLat([st.lon, st.lat]);
 }
+const SIDE = { left: ["bảng điều khiển", "panel"], right: ["bảng tóm tắt", "card"] };
+function setCollapsed(side, on, { remember = true } = {}) {
+  document.body.classList.toggle(`${side}-collapsed`, on);
+  const b = $(`tgl-${side}`);
+  b.setAttribute("aria-expanded", String(!on));
+  b.setAttribute("aria-label", `${on ? "Hiện" : "Ẩn"} ${SIDE[side][0]}`);
+  b.firstElementChild.textContent = (side === "left") === on ? "›" : "‹";
+  if (remember) mem.set(`fs.${side}`, on ? "1" : "0");
+}
 function moveMap() {
   if (!mapReady || !st.move) return;                           // keep the request until the map is ready
   const how = st.move;
   st.move = null;
   if (how === "ease") { map.easeTo({ center: [st.lon, st.lat], duration: 600 }); return; }
   const b = st.features && st.shape ? provinceBounds(st.features, st.shape) : null;
-  const pad = window.innerWidth > 760 ? 440 : 30;
+  const pad = window.innerWidth > 760 && !document.body.classList.contains("left-collapsed") ? Math.min(440, window.innerWidth * 0.4) : 30;
   if (b) map.fitBounds(b, { padding: { top: 50, bottom: 70, left: pad, right: 60 }, maxZoom: 11, duration: how === "fit" ? 0 : 1600 });
   else map.flyTo({ center: [st.lon, st.lat], zoom: 9.5, duration: 1600 });
 }
@@ -241,9 +239,63 @@ const chipHtml = (e) => {
   return `<span class="chip" title="${esc(e.gaez_class)}">${dot(c.key)}${esc(e.name_vi)} <small>${c.label}<span class="dtl"> · ${e.gaez_index}</span></small></span>`;
 };
 
+// ---- "i" popovers: extra information stays out of the way until asked for (click, so it works on a phone too)
+const pops = {};
+const setPop = (key, html) => { pops[key] = html; };
+const infoBtn = (key, tone = "") => `<button type="button" class="info ${tone}" data-pop="${key}" aria-label="Thông tin thêm" aria-haspopup="dialog">i</button>`;
+let popKey = null, swallowMapClick = false;
+function closePop() {
+  $("pop").hidden = true; popKey = null;
+  document.querySelectorAll("[data-pop][aria-expanded]").forEach((b) => b.removeAttribute("aria-expanded"));
+}
+function openPop(btn) {
+  const key = btn.dataset.pop;
+  if (!pops[key]) return;
+  if (popKey === key && !$("pop").hidden) { closePop(); return; }
+  closePop();
+  popKey = key;
+  $("pop-body").innerHTML = pops[key];
+  const el = $("pop");
+  el.hidden = false;
+  const r = btn.getBoundingClientRect(), w = el.offsetWidth, hgt = el.offsetHeight;
+  const panel = btn.closest(".panel");
+  let left, top;
+  if (panel && window.innerWidth > 760) {                       // beside the panel, so the text being read stays visible
+    left = panel.getBoundingClientRect().right + 12;
+    top = Math.min(Math.max(12, r.top - 8), Math.max(12, window.innerHeight - hgt - 12));
+  } else {
+    left = Math.min(Math.max(12, r.left - 8), Math.max(12, window.innerWidth - w - 12));
+    top = r.bottom + 8;
+    if (top + hgt > window.innerHeight - 12) top = Math.max(12, r.top - hgt - 8);
+  }
+  el.style.left = `${left}px`; el.style.top = `${top}px`;
+  btn.setAttribute("aria-expanded", "true");
+}
+const WATER = { wetland: "ngập nước", upland: "cạn" };
+function evidenceTable(o) {
+  const seen = new Set();
+  const rows = o.evidence.filter((e) => !seen.has(e.crop_code) && seen.add(e.crop_code)).map((e) => {
+    const c = classOf(e.gaez_index);
+    return `<tr><td>${esc(e.name_vi)}<span class="src">${esc(e.family)}${e.is_legume ? ", họ đậu" : ""}; ${esc(WATER[e.water_regime] ?? "")}</span></td><td>${dot(c.key)} ${c.label} (${esc(e.gaez_index)})</td><td>${esc(e.cycle_days_min)} ngày</td></tr>`;
+  }).join("");
+  return `<table><tr><th>Cây</th><th>Mức phù hợp</th><th>Vụ ngắn nhất</th></tr>${rows}</table>`;
+}
+const list = (cls, items) => `<ul class="${cls}">${items.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>`;
+function optionPop(o) {
+  const c = o.components;
+  return `<h4>${esc(o.label)}</h4>
+    ${o.benefits.length ? `<div class="pt">Lợi ích</div>${list("bn", o.benefits)}` : ""}
+    ${o.risks.length ? `<div class="pt">Rủi ro</div>${list("rk", o.risks)}` : ""}
+    <div class="pt">Từng cây</div>${evidenceTable(o)}
+    <p class="hint">Cần khoảng ${esc(c.cycle_days_total)} ngày, tính cả nghỉ giữa vụ ${esc(c.days_with_buffer)} ngày${c.fits_year ? `, dư ${esc(c.slack_days)} ngày` : " (không vừa một năm)"}. Chỉ số trung bình ${esc(c.gaez_mean)}.</p>
+    <p class="hint">Nguồn: ${esc(o.evidence_source)}</p>`;
+}
+
 function renderResults() {
   const box = $("res-body"), title = $("res-title");
   box.classList.toggle("busy", st.loading && !!st.result);
+  closePop();
+  $("res-info").innerHTML = "";
   if (st.outside) {
     title.textContent = "Phương án"; $("tab-res").textContent = "Gợi ý";
     box.innerHTML = note("Điểm này nằm ngoài ranh giới các tỉnh Việt Nam (hoặc ngoài khơi), nên công cụ không đưa ra gợi ý. Bấm vào một điểm trên đất liền Việt Nam.");
@@ -252,38 +304,53 @@ function renderResults() {
   if (st.error) { title.textContent = "Phương án"; $("tab-res").textContent = "Gợi ý"; box.innerHTML = errorHtml(st.error); return; }
   const r = st.result;
   if (!r) { title.textContent = "Phương án"; box.innerHTML = '<p class="hint">Đang tính…</p>'; return; }
-  const warn = r.warnings.map((w) => note(esc(w))).join("");
-  const unsup = r.unsupported_priorities.map((u) => note(`Chưa hỗ trợ ưu tiên “${esc(u.priority)}”: ${esc(u.reason)}.`)).join("");
   if (r.message) {
     title.textContent = cropName(st.crop); $("tab-res").textContent = "Gợi ý";
     box.innerHTML = note(esc(r.message)) + '<p class="hint">Chọn một cây một năm trong tab Tuỳ chỉnh để xem phương án luân canh.</p>';
     return;
   }
-  const keep = r.options[0];
+  const keep = r.options[0], fh = r.floor_hint;
   $("tab-res").textContent = `Gợi ý (${r.options.length})`;
   title.textContent = `${r.options.length} phương án cho ${cropName(st.crop).toLowerCase()} ở ${st.shape}`;
-  let h = warn + unsup;
-  const fh = r.floor_hint;
-  if (fh) {
-    h += note(esc(fh.message) + (fh.min_index != null ? ` <button type="button" class="small" data-floor="${esc(fh.min_index)}">Dùng ngưỡng ${esc(fh.min_index)}</button>` : ""));
+
+  // one popover for how the options are made (and the ones that could not be made)
+  setPop("title", `<h4>Về các phương án này</h4><p>${esc(r.note)}</p>`
+    + (r.ranked_by.length ? `<p>Xếp theo: ${esc(r.ranked_by.map((p) => p.meaning).join("; "))}.</p>` : "")
+    + `<p>${esc(r.principle)}</p>`
+    + (r.skipped.length ? `<div class="pt">Phương án không tạo được</div>${list("assump", r.skipped.map((q) => q.reason))}` : ""));
+  $("res-info").innerHTML = infoBtn("title");
+
+  // alerts: one short line in compact mode, the full text in detail mode and in the popover
+  const unsupported = r.unsupported_priorities.map((u) => `Chưa hỗ trợ ưu tiên “${u.priority}”: ${u.reason}.`);
+  const alerts = [...r.warnings, ...unsupported, ...(fh ? [fh.message] : [])];
+  let h = "";
+  if (alerts.length) {
+    setPop("alerts", `<h4>Lưu ý</h4>${list("assump", alerts)}`);
+    const floorBtn = fh?.min_index != null ? ` <button type="button" class="small" data-floor="${esc(fh.min_index)}">Dùng ngưỡng ${esc(fh.min_index)}</button>` : "";
+    const short = fh ? `Chỉ có ${r.options.length} phương án ở mức tối thiểu hiện tại.` : "Có lưu ý về mức phù hợp của cây.";
+    h += `<div class="note" data-pop="alerts" role="button" tabindex="0" aria-haspopup="dialog">${esc(short)}${floorBtn}</div>`;
   }
+
   h += r.options.map((o) => {
-    const c = o.components, t = o.id === "keep" ? null : tradeoff(c.gaez_mean - keep.components.gaez_mean);
+    const cmp = o.components, t = o.id === "keep" ? null : tradeoff(cmp.gaez_mean - keep.components.gaez_mean);
     const arrow = { up: "▲", down: "▼", same: "＝" };
-    return `<div class="opt ${o.id === "keep" ? "keep" : ""}">
+    const key = `opt-${o.id}`;
+    setPop(key, optionPop(o));
+    const bad = o.evidence.some((e) => e.gaez_index < 4000);
+    const tone = bad ? "bad" : o.risks.length ? "warn" : o.benefits.length ? "ok" : "";
+    const badges = [
+      o.benefits.length ? `<button type="button" class="bd ok" data-pop="${key}">✓ ${o.benefits.length} lợi ích</button>` : "",
+      bad ? `<button type="button" class="bd bad" data-pop="${key}">! Có cây dưới mức khả thi</button>`
+        : (o.risks.length ? `<button type="button" class="bd warn" data-pop="${key}">! ${o.risks.length} rủi ro</button>` : ""),
+    ].join("");
+    return `<div class="opt ${o.id === "keep" ? "keep" : ""} t-${tone || "none"}" data-pop="${key}" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Xem chi tiết: ${esc(o.label)}">
       <h3>${esc(o.label)}${o.id === "keep" ? '<span class="tag">Hiện tại</span>' : ""}</h3>
       <div class="seasons">${o.evidence.map(chipHtml).join("")}</div>
       ${t ? `<p class="trade ${t.dir}">${arrow[t.dir]} ${esc(t.text)}<span class="dtl"> (${t.delta > 0 ? "+" : ""}${t.delta})</span></p>` : '<p class="trade same">Mốc so sánh cho các phương án còn lại.</p>'}
-      ${o.benefits.length ? `<ul class="bn">${o.benefits.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>` : ""}
-      ${o.risks.length ? `<ul class="rk">${o.risks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
-      <p class="hint dtlb">Chỉ số trung bình ${esc(c.gaez_mean)}. Cần khoảng ${esc(c.cycle_days_total)} ngày, tính cả nghỉ giữa vụ ${esc(c.days_with_buffer)} ngày${c.fits_year ? `, dư ${esc(c.slack_days)} ngày` : " (không vừa một năm)"}.</p>
+      ${badges ? `<div class="badges">${badges}</div>` : ""}
     </div>`;
   }).join("");
-  if (r.skipped.length) {
-    h += `<details><summary>Phương án không tạo được (${r.skipped.length})</summary><ul class="assump">${r.skipped.map((s) => `<li>${esc(s.reason)}</li>`).join("")}</ul></details>`;
-  }
-  h += `<p class="hint" style="margin-top:12px">${esc(r.note)}${r.ranked_by.length ? ` Xếp theo: ${esc(r.ranked_by.map((x) => x.meaning).join("; "))}.` : ""}</p>`;
-  h += `<p class="hint">${esc(r.principle)}</p>`;
+
   box.innerHTML = h;
 }
 
@@ -309,6 +376,7 @@ function renderCard() {
   if (st.layerState === "error") { $("card").innerHTML = `${head}<div class="hint">Không tải được các ô dữ liệu. <button type="button" class="small" data-retry-layer>Thử lại</button></div>`; return; }
   if (!st.cells.length) { $("card").innerHTML = `${head}<div class="hint">Tỉnh này không có ô dữ liệu cho cây đang chọn.</div>`; return; }
   const counts = countByClass(st.cells);
+  const allHidden = Object.keys(counts).every((k) => st.hide.has(k));
   const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
   const bar = CLASSES.map((c) => `<i style="flex:${counts[c.key] ?? 0};background:var(--${c.key})"></i>`).join("");
   const checks = CLASSES.filter((c) => counts[c.key]).map((c) => `<label><input type="checkbox" data-k="${c.key}" ${st.hide.has(c.key) ? "" : "checked"}>${dot(c.key)}${c.label}: <b>${counts[c.key]}</b></label>`).join("");
@@ -317,10 +385,11 @@ function renderCard() {
   const rows = top.map((c) => `<div class="bar"><span>${esc(c.name_vi)}</span><span><i style="width:${idx[c.crop_code] / 100}%;background:var(--${classOf(idx[c.crop_code]).key})"></i></span><span>${idx[c.crop_code]}</span></div>`).join("");
   $("card").innerHTML = `<h4>Tóm tắt khu vực</h4>
     <div class="sumblock"><div class="sumtitle">Ô theo mức phù hợp · ${esc(cropName(st.crop))}</div>
+      <div class="hint" style="margin:-2px 0 8px">Bấm vào ô vuông để ẩn hoặc hiện từng mức.</div>
       <div class="segbar">${bar}</div><div class="sumchecks">${checks}</div>
-      ${st.flash ? `<div class="note">${esc(st.flash)}</div>` : ""}
+      ${allHidden ? '<div class="note">Đang ẩn tất cả các mức nên bản đồ không còn ô nào.</div>' : ""}
       ${st.hide.size ? '<button type="button" class="small" data-showall>Hiện tất cả</button>' : ""}
-      <div class="hint">Bỏ chọn một mức để ẩn các ô đó. ${total} ô nằm trong tỉnh; ô mờ ngoài biên là vùng đệm ${BUFFER_CELLS} ô.</div></div>
+      <div class="hint">${total} ô nằm trong tỉnh; ô mờ ngoài biên là vùng đệm ${BUFFER_CELLS} ô.</div></div>
     ${rows ? `<div class="sumblock"><div class="sumtitle">Cây một năm hợp nhất ở ô đã chọn</div>${rows}</div>` : ""}`;
 }
 
@@ -404,25 +473,26 @@ function bindEvents() {
     $(id).addEventListener("input", () => { minLabel(); loadOptionsSoon(); });
   }
   $("tabs").onclick = (e) => { const b = e.target.closest("button"); if (b) setTab(b.dataset.tab); };
-  $("to-as").onclick = () => setTab("as");
+  document.addEventListener("mousedown", (e) => {               // a click outside closes the popover and does nothing else
+    if ($("pop").hidden || e.target.closest("#pop") || e.target.closest("[data-pop]")) return;
+    closePop();
+    swallowMapClick = true;
+    setTimeout(() => { swallowMapClick = false; }, 400);
+  }, true);
+  document.addEventListener("click", (e) => {                   // "i" popovers
+    if (e.target.closest("[data-floor]")) return;
+    const b = e.target.closest("[data-pop]");
+    if (b) { openPop(b); return; }
+    const g = e.target.closest("#pop [data-goto]");
+    if (g) { closePop(); setTab(g.dataset.goto); return; }
+    if (e.target.closest("#pop .x") || !e.target.closest("#pop")) closePop();
+  });
   $("edit").onclick = $("mc-loc").onclick = $("mc-crop").onclick = $("newplan").onclick = openOnb;
   $("mc-n").onclick = () => setTab("in");
   $("card").addEventListener("change", (e) => {
     const k = e.target.dataset.k; if (!k) return;
-    if (e.target.checked) st.hide.delete(k);
-    else {
-      const levels = Object.keys(countByClass(st.cells));
-      if (levels.every((x) => x === k || st.hide.has(x))) {       // the last visible level cannot be hidden
-        e.target.checked = true;
-        flash("Cần giữ ít nhất một mức để bản đồ còn ô.");
-        return;
-      }
-      st.hide.add(k);
-    }
+    if (e.target.checked) st.hide.delete(k); else st.hide.add(k);
     drawCells(); renderCard();
-  });
-  $("maphint").addEventListener("click", (e) => {
-    if (e.target.closest("[data-showall]")) { st.hide.clear(); drawCells(); renderCard(); }
   });
   $("card").addEventListener("click", (e) => {
     if (e.target.closest("[data-showall]")) { st.hide.clear(); drawCells(); renderCard(); }
@@ -433,9 +503,16 @@ function bindEvents() {
     const f = e.target.closest("[data-floor]");
     if (f) { $("minidx").value = f.dataset.floor; minLabel(); loadOptions(); }
   });
+  $("tgl-left").onclick = () => setCollapsed("left", !document.body.classList.contains("left-collapsed"));
+  $("tgl-right").onclick = () => setCollapsed("right", !document.body.classList.contains("right-collapsed"));
   $("zin").onclick = () => map?.zoomIn();
   $("zout").onclick = () => map?.zoomOut();
-  $("detail").onchange = (e) => { document.body.classList.toggle("detail", e.target.checked); mem.set("fs.detail", e.target.checked ? "1" : "0"); };
+  $("detail").onclick = (e) => {
+    const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
+    e.currentTarget.setAttribute("aria-pressed", String(on));
+    document.body.classList.toggle("detail", on);
+    mem.set("fs.detail", on ? "1" : "0");
+  };
 
   $("o-ok").onclick = async () => {
     const name = $("o-prov").value, crop = $("o-crop").value;
@@ -455,13 +532,23 @@ function bindEvents() {
     }, () => { $("o-geomsg").textContent = " Không lấy được vị trí. Hãy chọn tỉnh hoặc bấm vào bản đồ."; }, { timeout: 8000 });
   };
   $("onb").addEventListener("click", (e) => { if (e.target === $("onb")) closeOnb(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("onb").hidden) closeOnb(); });
+  document.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.('[data-pop][role="button"]')) { e.preventDefault(); openPop(e.target); return; }
+    if (e.key !== "Escape") return;
+    closePop();
+    if (!$("onb").hidden) closeOnb();
+  });
 }
 
 // ---- start
 async function boot() {
   bindEvents();
-  if (mem.get("fs.detail") === "1") { $("detail").checked = true; document.body.classList.add("detail"); }
+  const savedDetail = mem.get("fs.detail");                      // detail view is the default; a saved choice wins
+  if (savedDetail === null || savedDetail === "1") { $("detail").setAttribute("aria-pressed", "true"); document.body.classList.add("detail"); }
+  setPop("prio", "<h4>Ưu tiên</h4><p>Đang hỗ trợ: cải tạo đất (cây họ đậu trước), giảm sâu bệnh (ít vụ liền nhau cùng họ), mức phù hợp cao.</p><p>Chưa có dữ liệu cho ưu tiên về nước, xói mòn, thu nhập và đất (xem tab Giả định).</p>");
+  setPop("disc", '<h4>Về công cụ này</h4><p>Công cụ chỉ hỗ trợ ra quyết định, không thay thế phán đoán của nông dân hay chuyên gia địa phương.</p><p>Dữ liệu theo ô khoảng 80–85 km², là mức trung bình cho cả vùng chứ không phải cho một thửa ruộng.</p><p><button type="button" class="link" data-goto="as">Xem giả định</button></p>');
+  setCollapsed("left", mem.get("fs.left") === "1", { remember: false });
+  setCollapsed("right", (mem.get("fs.right") ?? (window.innerWidth < 1100 ? "1" : "0")) === "1", { remember: false });
   minLabel(); setTab("res"); initMap();
   $("res-body").innerHTML = '<p class="hint">Đang tải dữ liệu…</p>';
   try {

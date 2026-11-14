@@ -1,6 +1,6 @@
 # pipeline/
 
-Pipeline lấy, xử lý và đóng gói dữ liệu cho app Field Shift (thư mục `app/`):
+Pipeline lấy, xử lý và đóng gói dữ liệu cho app NextCrop (thư mục `app/`):
 
 ```
 NASA / FAO  ->  bronze (dữ liệu gốc)  ->  silver (bảng phẳng, có khóa)  ->  gold (JSON)

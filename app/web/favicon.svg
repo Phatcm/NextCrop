@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="64" height="64" role="img" aria-label="NextCrop">
+  <rect width="32" height="32" rx="8" fill="#0c4540"/>
+  <g color="#e5edcf">
+    <path d="M22.43 8.34A10 10 0 1 1 9.57 8.34" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+    <polygon points="12.63,5.77 11.5,10.64 7.64,6.04" fill="currentColor"/>
+    <g transform="translate(16 16) scale(.7) translate(-16 -16)" fill="currentColor">
+      <path d="M16 17c-4.5 0-6-3-6-6 3.5 0 6 1.5 6 6z"/>
+      <path d="M16 15c0-4.5 2.5-7 7-7 0 4-2.5 7-7 7z"/>
+      <path d="M16 23V15" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+    </g>
+  </g>
+</svg>

@@ -1,4 +1,4 @@
-# Tự host PostgreSQL cho app Field Shift
+# Tự host PostgreSQL cho app NextCrop
 
 Hướng dẫn cho máy server tự quản. Phần cấu hình server (mục 2, 3) là chỉ dẫn chuẩn của PostgreSQL, **chưa được thử trên máy server của dự án**; hãy xác nhận bằng `python load_postgres.py --check-server` (mục 5).
 

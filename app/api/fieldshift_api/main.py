@@ -1,4 +1,4 @@
-"""Field Shift API: read-only endpoints over the Postgres data the pipeline loads.
+"""NextCrop API: read-only endpoints over the Postgres data the pipeline loads.
 
 Run (from app/api):  uvicorn fieldshift_api.main:app --reload --port 8000
 """
@@ -17,7 +17,7 @@ from . import config
 from .repo import PgRepo, Repo
 from .service import ApiError, Service
 
-app = FastAPI(title="Field Shift API", version="1.0",
+app = FastAPI(title="NextCrop API", version="1.0",
               description="Hỗ trợ ra quyết định luân canh. Chỉ tư vấn; dữ liệu theo ô GAEZ ~9 km, không phải từng thửa.")
 app.add_middleware(CORSMiddleware, allow_origins=config.cors_origins(), allow_methods=["GET"], allow_headers=["*"])
 
