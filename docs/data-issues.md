@@ -45,6 +45,7 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 | DATA-11 | Thấp | GAEZ là tiềm năng, không đơn điệu | Hùng (giao diện) |
 | DATA-12 | Thấp | Độ phủ thời gian: không có 2026, mốc NDVI trước 2015 | Phát |
 | DATA-13 | Thấp | Đơn vị và ngày tạo chưa có trong Postgres | Phát |
+| DATA-14 | Trung bình | Điểm ngoài Việt Nam (Lào, Campuchia, Trung Quốc) vẫn nhận phương án | Hùng (app) + Phát |
 | OPS-01..10 | xem mục 4 | | |
 
 ## 3. Vấn đề dữ liệu
@@ -66,6 +67,9 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 
 ### DATA-02 · ĐÃ XỬ LÝ phần sinh phương án (14/11/2026) · Không có cây/luân canh hiện tại, không có định nghĩa phương án
 - **Đã làm:** `pipeline/src/rotation/options.py` (thư viện thuần Python), lệnh thử `pipeline/rotation_options.py`, quy tắc ghi ở `docs/rotation-rules.md`, cột `water_regime` (migration `005`). Người dùng chọn cây hiện tại; bộ sinh trả **4 mẫu thay đổi nhỏ** (giữ nguyên, thay 1 vụ bằng cây họ đậu, thay 1 vụ bằng cây khác họ, đổi nhiều vụ mỗi vụ một họ), mỗi mẫu hiện từng thành phần (điểm GAEZ trung bình, cặp vụ cùng họ, họ đậu, số ngày) chứ **không có điểm tổng**, kèm lợi ích, rủi ro, bằng chứng và phần còn thiếu. Ưu tiên người dùng chọn quyết định thứ tự; ưu tiên chưa có dữ liệu (nước, xói mòn, thu nhập, đất) được khai báo là chưa hỗ trợ, không lờ đi. Ba tham số người dùng chỉnh được và luôn được ghi lại kèm nguồn: khoảng nghỉ giữa hai vụ lúa nước (mặc định 7 ngày, có nguồn nhưng chỉ từ một nông hộ), khoảng nghỉ các cặp khác (mặc định 15 ngày, **giả định chưa có nguồn**; chưa tìm được nguồn cho cây màu sau lúa dù đã tìm tiếng Việt, tiếng Anh và kho văn bản mở), chỉ số GAEZ tối thiểu (mặc định 4000, ranh giới lớp "phù hợp trung bình" của FAO).
+- **Kiểm thử rộng 14/11 (12 cây một năm × 6 vùng demo × 2 mức đầu vào = 144 trường hợp, dữ liệu thật):** không vi phạm tính chất nào (phương án đầu là giữ nguyên, giữ cây chủ lực, vừa năm, không đặt cây ngập vào ruộng cạn, cây thay thế từ ngưỡng trở lên). Kết quả Neon và silver giống nhau từng byte. **118/120 trường hợp ngoài Sơn La có ≥ 3 phương án.** Hai ngoại lệ: Sóc Trăng với cây hiện tại là đậu tương chỉ có 2 phương án (mẫu họ đậu không áp dụng, mẫu đổi nhiều vụ không có tổ hợp), mức độ nhẹ.
+- **Sơn La không có phương án nào ngoài giữ nguyên ở ngưỡng mặc định:** cả 12 cây một năm đều dưới 1.000 ở ô trung tâm (ngô 452), số liệu cấp vùng cũ cho cùng hướng (ngô trung bình 750, trung vị 472, pixel cao nhất 3.291). Không phải lỗi lưới. Có thể GAEZ phạt nặng độ dốc và độ cao (533–868 m), trong khi thực tế vẫn trồng ngô nương: hạn chế của dữ liệu, không phải kết luận về nông nghiệp. **Quyết định 14/11:** cho người dùng hạ ngưỡng (`min_index`), giao diện hiện bảng lớp FAO (`index_classes`), kết quả có `floor_hint` và cảnh báo từng cây dưới 4000. **Không nên dùng Sơn La làm vùng demo chính**; dùng nó để minh họa giới hạn của công cụ.
+- **Bằng chứng ít hơn ngoài 6 vùng:** phương án chỉ cần `gaez_grid` và `dim_crop` (phủ cả nước); NDVI, SMAP, lớp phủ đất và mưa hiệu chỉnh CHIRPS chỉ có ở 6 vùng, mưa ngoài 6 vùng là POWER chưa hiệu chỉnh. Chưa kiểm thử trên cả 9.280 ô.
 - **Chưa làm:** nối vào app (chưa quyết định tính theo yêu cầu hay tính sẵn vào bảng/JSON); thứ tự các vụ (chưa xếp lịch, xem lý do ở dưới). **Đã nạp 14/11:** R2 run `20261114T081629Z`, Neon 626.287 dòng, 31/31 kiểm tra qua, migration `005` đã áp.
 - **Vấn đề:** đề yêu cầu so sánh ≥3 phương án luân canh gồm phương án hiện tại; dữ liệu không có "cây hiện tại" của vùng và không có định nghĩa phương án (chuỗi cây theo mùa).
 - **Hướng xử lý:** quyết định ai định nghĩa. Cách đơn giản: người dùng chọn cây hiện tại trong app, Hùng định nghĩa các mẫu luân canh (bảng `rotation_option`) hoặc quy tắc sinh phương án từ bảng cây trồng (DATA-01, phụ thuộc).
@@ -141,6 +145,12 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 ### DATA-12 · Thấp · Độ phủ thời gian
 - POWER và MODIS kết thúc cuối 2025 (thiếu ~10,5 tháng của 2026); GFSAD chỉ có 2015; GIBS chỉ 2023–2025.
 - Mốc NDVI sớm nhất là **2014-12-19** (composite 16 ngày đầu tiên của 2015 bắt đầu từ cuối 2014) trong khi `dim_region.year_start = 2015`: lệch nhỏ, cần lọc hoặc ghi chú.
+
+### DATA-14 · Trung bình · Điểm ngoài Việt Nam vẫn nhận phương án luân canh
+- **Vấn đề:** `gaez_grid` là hình chữ nhật 102–110°E, 8–24°N nên có cả Lào, Campuchia và miền nam Trung Quốc. Bộ sinh phương án không biết ranh giới quốc gia: điểm ở Viêng Chăn (17,97°N 102,6°E) nhận kết quả đầy đủ như điểm ở Việt Nam. Điểm ngoài biển thì bị từ chối đúng (không có ô trong 0,1°).
+- **[ĐÃ XÁC NHẬN] 14/11** bằng lệnh `rotation_options.py` với điểm ở Viêng Chăn. Dữ liệu GAEZ ở đó vẫn là GAEZ hợp lệ; vấn đề là phạm vi sản phẩm (đề và dữ liệu mưa hiệu chỉnh chỉ cho Việt Nam).
+- **Hướng xử lý:** cần một lớp ranh giới Việt Nam (chưa có trong repo; ứng viên: ranh giới quốc gia của UN/GADM, **[CHƯA KIỂM CHỨNG]** giấy phép) để (a) giới hạn vùng chọn trên bản đồ, và/hoặc (b) thêm cột `in_vietnam` vào `gaez_grid` lúc ETL. App phải tự giới hạn cho đến khi có.
+- **Xong khi:** điểm ngoài Việt Nam bị từ chối với thông báo rõ, có test.
 
 ### DATA-13 · Thấp · Đơn vị và ngày tạo chưa có trong Postgres
 - Đơn vị (°C, mm/ngày, %, m/s, MJ/m²/ngày, m³/m³) chỉ nằm trong JSON gold; bảng Postgres không có. `dim_region` không có ngày tạo (chỉ `pipeline_run.loaded_at`).
