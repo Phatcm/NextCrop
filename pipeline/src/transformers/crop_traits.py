@@ -32,6 +32,10 @@ def load_traits(path: Path) -> dict[str, dict]:
         for n, row in enumerate(csv.DictReader(f), start=2):
             code = (row.get("crop_code") or "").strip()
             where = f"{path.name} line {n} ({code or '?'})"
+            # DictReader silently drops extra cells and fills missing ones with None: an unquoted comma
+            # inside a text field would shift the row without any error, so reject it explicitly.
+            if None in row or None in row.values():
+                raise ValueError(f"{where}: wrong number of cells (quote text that contains a comma)")
             if not code:
                 raise ValueError(f"{where}: empty crop_code")
             if code in out:

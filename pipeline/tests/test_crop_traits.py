@@ -39,6 +39,12 @@ def test_perennials_have_no_season_cycle_and_annuals_with_gaez_row_have_one():
             assert t["cycle_days_min"] is not None and t["cycle_days_min"] <= t["cycle_days_max"], code
 
 
+def test_notes_survive_with_commas_and_diacritics():
+    assert "kiến thức chung, chưa kiểm chứng" in TRAITS["CSH"]["notes"]
+    assert "chè Trung Quốc 5" in TRAITS["TEA"]["notes"]
+    assert "min temp 5 for China tea, 10 for hybrid" in TRAITS["TEA"]["traits_source"]
+
+
 def test_every_crop_has_family_life_cycle_and_sources():
     for code, t in TRAITS.items():
         assert t["family"] and t["life_cycle"] and t["traits_source"] and t["family_source"], code
@@ -65,6 +71,8 @@ def test_crops_without_a_gaez_parameter_row_are_declared_not_guessed():
     ("X,XX,G,perennial,false,F,300,300,,s,s,\n", "perennial"),
     ("X,XX,G,annual,false,F,abc,100,,s,s,\n", "not a number"),
     ("X,XX,G,annual,false,F,,,,s,s,\nX,XX,G,annual,false,F,,,,s,s,\n", "duplicate"),
+    ("X,XX,G,annual,false,F,,,,s,s,cay lau nam, kien thuc chung\n", "wrong number of cells"),   # unquoted comma
+    ("X,XX,G,annual,false,F,,,,s\n", "wrong number of cells"),                                    # too few cells
 ])
 def test_malformed_rows_are_rejected(tmp_path, body, msg):
     with pytest.raises(ValueError, match=msg):
