@@ -190,6 +190,10 @@ Quy ước: **[ĐÃ XÁC NHẬN]** = đã kiểm tra bằng dữ liệu hoặc A
 - **Quyết định 14/11:** giữ ô 5 phút cho bản thi; ghi backlog.
 - **Xong khi:** có một lớp ô nhỏ hơn với nguồn che đất đã kiểm chứng, so với SUX ở 6 vùng demo, và giao diện không gợi ý độ chính xác theo thửa.
 
+### DATA-17 · ĐÃ XỬ LÝ (14/11/2026, migration 012) · Đầu vào môi trường (DATA-03) chỉ có cho 6 vùng, app chạy theo ô cả nước
+- **Đã làm:** bảng `grid_environment` (độ dốc, đất theo ô) và `grid_water_demand` (nhu cầu tưới theo ô, cây, mức đầu vào) cho mọi ô nằm trong Việt Nam (`grid_vietnam.in_vietnam`), từ cùng lớp GAEZ và cùng quy tắc với bảng vùng.
+- **Chưa có theo ô:** xói mòn đầy đủ (cần lượng mưa theo ô; lưới mưa cả nước là POWER, lệch tới +126% ở Ninh Thuận) và cân bằng nước ET0. Chỉ có `slope_class`, tức nửa địa hình của quy tắc xói mòn. Doanh thu theo cây không phụ thuộc vị trí (`crop_profile`).
+
 ### DATA-13 · Thấp · Đơn vị và ngày tạo chưa có trong Postgres
 - Đơn vị (°C, mm/ngày, %, m/s, MJ/m²/ngày, m³/m³) chỉ nằm trong JSON gold; bảng Postgres không có. `dim_region` không có ngày tạo (chỉ `pipeline_run.loaded_at`).
 - **Hướng xử lý:** `COMMENT ON COLUMN` ghi đơn vị trong migration mới, hoặc thêm bảng `column_units`.

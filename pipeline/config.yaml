@@ -171,6 +171,11 @@ gaez:
 gaez_grid:      # lớp RES05-SUX (đất canh tác, phần tốt nhất của ô), lưới gốc 5 phút cung ~9 km, không gộp ô
   bbox: [102.0, 8.0, 110.0, 24.0]
 
+# DATA-17: độ dốc, đất, nhu cầu nước cho MỌI ô lưới trong Việt Nam (cùng lớp GAEZ với `environment`, đọc cả khung gaez_grid.bbox)
+grid_environment:
+  soil_factors: [SQ0, SQ1, SQ5]   # yếu tố hạn chế nhất, dinh dưỡng, mặn; mỗi yếu tố ở mức đầu vào cao (HIM) và thấp (LIM)
+  workers: 4
+
 # DATA-14: ranh giới Việt Nam (geoBoundaries gbOpen ADM0, CC BY 4.0) -> tỷ lệ diện tích mỗi ô lưới nằm trong nước
 vn_boundary:
   cell_deg: 0.0833333333   # 5 phút cung, đúng lưới gaez_grid

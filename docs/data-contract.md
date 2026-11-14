@@ -27,6 +27,8 @@ Nguồn thật là [pipeline/db/migrations/001_init.sql](../pipeline/db/migratio
 | `smap_daily` | `region_id, date` | độ ẩm đất SMAP; `sm_recommended` là NULL khi NASA không khuyến nghị |
 | `gaez_suitability` | `region_id, crop_code, input_mode, period, ssp` | mức thích hợp 0–10000, 4 mức đầu vào; lớp đất canh tác `RES05-SUX` (cùng `gaez_grid`), thống kê các ô 5 phút cung phủ bbox vùng (`n_px` 4–9) |
 | `grid_vietnam` | `lat, lon` | mỗi ô của `gaez_grid`: `vn_share` (0–1, phần diện tích ô nằm trong Việt Nam) và `in_vietnam` (>= 0,5). Nguồn geoBoundaries gbOpen ADM0, CC BY 4.0, sai số ~1 km (DATA-14) |
+| `grid_environment` | `lat, lon` | mỗi ô lưới **trong Việt Nam**: `slope_mean_pct`, `share_gt12_pct`, `share_gt24_pct`, `slope_class` (low/moderate/high, chỉ phần địa hình của quy tắc xói mòn), đất `soil_{limiting,nutrient,salinity}_{him,lim}` (0–1; `NULL` = không có pixel hợp lệ, không phải 0). GAEZ LR-SLC và SQX, cùng quy tắc với `terrain_slope`/`soil_quality` (DATA-17) |
+| `grid_water_demand` | `lat, lon, crop_code, input_mode` | nhu cầu tưới ròng `wdc_mm` (GAEZ RES05-WDC, đất canh tác hiện có, chỉ HILM/LILM); **không có dòng = không có giá trị** (không có đất canh tác), dòng `0` = không mô hình hóa thiếu nước (DATA-17) |
 | `gaez_grid` | `lat, lon, crop_code` | GAEZ cả nước, lớp **đất canh tác** `RES05-SUX`, lưới gốc 5 phút cung (~9 km; tâm ô `24 − (i+0,5)/12`, `102 + (j+0,5)/12`): cột `hilm, hrlm, lilm, lrlm` (0–10000, có thể chạm trần 10000) cho mỗi cây; app tra ô gần điểm người dùng chọn (trong 0,05°) |
 | `gfsad_points`, `landcover_by_year`, `landcover_classes`, `terrain` | theo vùng | đất canh tác 30 m, lớp phủ MODIS, độ cao |
 | `vn_grid_monthly` | `lat, lon, param, yyyymm` | lưới khí hậu cả nước (cho bản đồ) |
