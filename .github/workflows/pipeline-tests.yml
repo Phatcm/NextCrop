@@ -13,7 +13,7 @@ jobs:
       postgres:                       # disposable database for tests/test_postgres.py
         image: postgres:17
         env:
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust   # throwaway container, reachable only from this runner: no password at all
           POSTGRES_DB: test
         ports: ['5432:5432']
         options: >-
@@ -23,7 +23,7 @@ jobs:
       run:
         working-directory: pipeline
     env:
-      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
+      TEST_DATABASE_URL: postgresql://postgres@localhost:5432/test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
