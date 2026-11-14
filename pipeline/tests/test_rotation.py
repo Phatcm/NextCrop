@@ -41,6 +41,7 @@ def test_components_are_reported_not_collapsed_into_one_score():
     res = ro.generate("RCW", CROPS, AN_GIANG)
     keep = res["options"][0]["components"]
     assert keep["same_family_adjacent"] == 3 and keep["has_legume"] is False and keep["gaez_mean"] == 8460
+    assert keep["days_with_buffer"] == 336 and keep["slack_days"] == 29          # 3 x 105 + 3 x 7 (paddy rice gap)
     assert not any("score" in o or "total" in o for o in res["options"])
     div = next(o for o in res["options"] if o["id"] == "diverse")["components"]
     assert div["same_family_adjacent"] == 0 and div["has_legume"] is True and div["days_with_buffer"] == 350
@@ -92,10 +93,75 @@ def test_no_candidates_leaves_only_the_current_option_with_reasons():
     assert {s["id"] for s in res["skipped"]} == {"legume", "other_family", "diverse"}
 
 
-def test_candidates_must_reach_the_ratio_of_the_current_index():
-    suit = {"RCW": 8000, "COW": 4000, "GRD": 4799, "SOY": 4801}        # floor = 0.6 * 8000 = 4800
-    assert ro.eligible("RCW", CROPS, suit) == ["SOY"]
-    assert ro.eligible("RCW", CROPS, suit, min_ratio=0.4) == ["SOY", "GRD", "COW"]
+def test_candidates_must_reach_the_fao_moderately_suitable_floor():
+    suit = {"RCW": 8000, "COW": 3999, "GRD": 4000, "SOY": 4801}        # FAO: 4000 = lower bound of "moderately suitable"
+    assert ro.eligible("RCW", CROPS, suit) == ["SOY", "GRD"]
+    assert ro.eligible("RCW", CROPS, suit, min_index=2000) == ["SOY", "GRD", "COW"]
+
+
+def test_gaez_class_labels_follow_the_fao_table():
+    assert ro.gaez_class(8460) == "Rất phù hợp" and ro.gaez_class(8000) == "Rất phù hợp"
+    assert ro.gaez_class(7999) == "Phù hợp" and ro.gaez_class(4000) == "Trung bình"
+    assert ro.gaez_class(3999).startswith("Biên") and ro.gaez_class(1500).startswith("Rất biên")
+    assert ro.gaez_class(0).startswith("Không phù hợp") and ro.gaez_class(None).startswith("Không phù hợp")
+    ev = ro.generate("RCW", CROPS, AN_GIANG)["options"][1]["evidence"]
+    assert {e["crop_code"]: e["gaez_class"] for e in ev}["COW"] == "Phù hợp"      # 7272
+
+
+def test_current_crop_below_the_floor_is_flagged_and_alternatives_stay_above_it():
+    suit = {"RCW": 3981, "COW": 4991, "CSV": 5433, "SPO": 4664, "GRD": 3595}      # Dak Lak style: rice itself is "Biên"
+    res = ro.generate("RCW", CROPS, suit)
+    assert res["current_gaez"]["class"].startswith("Biên") and any("dưới ngưỡng" in w for w in res["warnings"])
+    assert all(suit[c] >= 4000 for o in res["options"][1:] for c in o["sequence"] if c != "RCW")
+
+
+def test_gap_is_7_days_between_paddy_rice_crops_and_15_otherwise_and_both_are_echoed():
+    res = ro.generate("RCW", CROPS, AN_GIANG)
+    a = res["assumptions"]
+    assert a["gap_rice"]["days"] == 7 and a["gap_other"]["days"] == 15 and a["min_index"]["value"] == 4000
+    assert not any(v["custom"] for v in (a["gap_rice"], a["gap_other"], a["min_index"]))
+    assert "PMC7059783" in a["gap_rice"]["source"] and "chưa có nguồn" in a["gap_other"]["source"]
+    gaps = {"rice": 7, "other": 15}
+    assert ro.gap_total(["RCW", "RCW", "RCW"], gaps) == 21
+    assert ro.gap_total(["RCW", "RCW", "COW"], gaps) == 7 + 15 + 15           # only RCW->RCW is the cheap pair
+    assert ro.gap_total(["COW"], gaps) == 15
+
+
+def test_user_can_change_both_gaps_and_the_result_says_so():
+    res = ro.generate("RCW", CROPS, AN_GIANG, gap_rice=10, gap_other=5, min_index=5000)
+    a = res["assumptions"]
+    assert a["gap_rice"] == {**a["gap_rice"], "days": 10, "custom": True}
+    assert a["gap_other"]["days"] == 5 and a["gap_other"]["custom"] is True
+    assert a["min_index"]["value"] == 5000 and a["min_index"]["custom"] is True
+    assert res["options"][0]["components"]["days_with_buffer"] == 315 + 30
+
+
+def test_changing_the_gap_can_change_the_number_of_seasons_and_warns():
+    res = ro.generate("RCW", CROPS, AN_GIANG, gap_rice=30)                    # 3 x 105 + 3 x 30 = 405 > 365
+    assert res["seasons"] == 2
+    assert any("2 thay vì 3" in w for w in res["warnings"])
+    explicit = ro.generate("RCW", CROPS, AN_GIANG, gap_rice=30, seasons=3)
+    assert explicit["message"].startswith("3 vụ")                             # explicit seasons: refused, not silently changed
+
+
+@pytest.mark.parametrize("kwargs", [{"gap_rice": -1}, {"gap_other": 61}, {"min_index": 10001}, {"gap_rice": "7"},
+                                    {"gap_other": True}])
+def test_out_of_range_parameters_are_rejected(kwargs):
+    with pytest.raises(ValueError):
+        ro.generate("RCW", CROPS, AN_GIANG, **kwargs)
+
+
+def test_options_close_to_the_edge_say_how_little_room_is_left():
+    suit = {"RCW": 8460, "TOM": 5781}
+    res = ro.generate("RCW", CROPS, suit, gap_other=15)
+    tom = next(o for o in res["options"] if o["id"] == "other_family")
+    assert tom["components"]["slack_days"] == 365 - (105 + 105 + 105 + 7 + 15 + 15) == 13
+    tight = ro.generate("RCW", CROPS, suit, gap_other=19)                     # 315 + 7 + 19 + 19 = 360, 5 days left
+    t2 = next(o for o in tight["options"] if o["id"] == "other_family")
+    assert t2["components"]["slack_days"] == 5 and any("Sát mép" in r for r in t2["risks"])
+    over = ro.generate("RCW", CROPS, suit, gap_other=22)                      # 366 > 365: no longer fits, so it is dropped
+    assert "other_family" not in [o["id"] for o in over["options"]]
+    assert any(s["id"] == "other_family" for s in over["skipped"])
 
 
 def test_long_cycle_crop_gets_one_season_and_no_diverse_option():

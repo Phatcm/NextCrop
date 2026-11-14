@@ -6,6 +6,11 @@ of the point is used; outside that range there is no answer (the point is not on
 Usage (from pipeline/):
     python rotation_options.py --lat 10.45 --lon 105.35 --crop RCW
     python rotation_options.py --lat 10.45 --lon 105.35 --crop RCW --mode hilm --seasons 2 --priorities nitrogen yield
+    python rotation_options.py --lat 10.45 --lon 105.35 --crop RCW --gap-rice 10 --gap-other 20 --min-index 5000
+
+Adjustable assumptions (defaults come with their source in the output): --gap-rice (days between two paddy rice
+crops, default 7), --gap-other (every other pair, default 15, no source), --min-index (GAEZ index floor, default
+4000 = FAO "moderately suitable").
 """
 from __future__ import annotations
 
@@ -60,6 +65,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--mode", choices=MODES, default="hrlm", help="GAEZ input level (default: rain-fed, high inputs)")
     ap.add_argument("--seasons", type=int, help="crops per year (default: as many as fit, up to 3)")
     ap.add_argument("--priorities", nargs="*", default=["yield"])
+    ap.add_argument("--gap-rice", type=int, help="days between two paddy rice crops (0-60, default 7)")
+    ap.add_argument("--gap-other", type=int, help="days between any other pair of crops (0-60, default 15)")
+    ap.add_argument("--min-index", type=int, help="minimum GAEZ index of a replacement crop (0-10000, default 4000)")
     ap.add_argument("--silver", default=None, help="silver folder (default: data/silver)")
     args = ap.parse_args(argv)
 
@@ -74,7 +82,12 @@ def main(argv: list[str] | None = None) -> int:
         print("no GAEZ grid cell within 0.1 deg: the point is outside the Vietnam grid", file=sys.stderr)
         return 3
     suit, (la, lo) = cell
-    res = ro.generate(args.crop, crops, suit, mode=args.mode, seasons=args.seasons, priorities=args.priorities)
+    try:
+        res = ro.generate(args.crop, crops, suit, mode=args.mode, seasons=args.seasons, priorities=args.priorities,
+                          gap_rice=args.gap_rice, gap_other=args.gap_other, min_index=args.min_index)
+    except ValueError as e:
+        print(f"invalid argument: {e}", file=sys.stderr)
+        return 2
     res["location"] = {"lat": args.lat, "lon": args.lon, "cell_lat": la, "cell_lon": lo}
     print(json.dumps(res, ensure_ascii=False, indent=2))
     return 0
