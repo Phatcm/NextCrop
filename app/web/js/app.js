@@ -321,9 +321,38 @@ function optionPop(o) {
   return `<h4>${esc(o.label)}</h4>
     ${o.benefits.length ? `<div class="pt">${t("pt.benefits")}</div>${list("bn", o.benefits)}` : ""}
     ${o.risks.length ? `<div class="pt">${t("pt.risks")}</div>${list("rk", o.risks)}` : ""}
+    ${climatePop(o)}
     <div class="pt">${t("pt.perCrop")}</div>${evidenceTable(o)}
     <p class="hint">${esc(cycle)}</p>
     <p class="hint">${esc(t("pt.source", { src: o.evidence_source }))}</p>`;
+}
+
+// ---- moisture check (API: climate_check, an annotation that never changes the ranking)
+const ccOf = (o) => {
+  const cc = st.result?.climate_check;
+  return cc?.applies ? cc.options?.[o.id] ?? null : null;
+};
+function climateBadge(o, key) {
+  const c = ccOf(o);
+  if (!c || c.status === "unknown") return "";
+  const ok = c.status === "enough";
+  const label = ok ? t("cc.enough") : t("cc.short", { d: c.shortfall_days });
+  const near = c.near_limit ? ` · ${t("cc.near")}` : "";
+  return `<button type="button" class="bd ${ok && !c.near_limit ? "water" : "dry"}" data-pop="${key}">${DROP}${esc(label + near)}</button>`;
+}
+const DROP = '<svg class="drop" viewBox="0 0 12 14" width="11" height="13" aria-hidden="true"><path d="M6 1C6 1 1.5 6 1.5 9a4.5 4.5 0 0 0 9 0C10.5 6 6 1 6 1z" fill="currentColor"/></svg>';
+function climatePop(o) {
+  const cc = st.result?.climate_check, c = ccOf(o);
+  if (!c) return "";
+  const months = cc.monthly.map((m) => `<i class="${m.moist ? "mm on" : "mm"}" title="${esc(`${m.m}: ${m.rain_mm} mm / ET0 ${m.et0_mm} mm`)}">${m.m}</i>`).join("");
+  return `<div class="pt">${t("cc.title")}</div>
+    <p>${esc(c.message)}</p>
+    <p class="hint">${esc(t("cc.area", { name: cc.area.name, km: cc.area.distance_km, days: cc.moist_season.days }))}</p>
+    <div class="mmrow" role="img" aria-label="${esc(t("cc.months"))}">${months}</div>
+    <p class="hint">${esc(t("cc.months"))}</p>
+    <p class="hint">${esc(cc.method)}</p><p class="hint">${esc(cc.sources)}</p>
+    ${cc.caveats?.length ? `<div class="pt">${t("cc.caveats")}</div>${list("assump", cc.caveats)}` : ""}
+    ${cc.not_checked?.length ? `<div class="pt">${t("cc.notChecked")}</div>${list("assump", cc.not_checked)}` : ""}`;
 }
 
 function renderResults() {
@@ -363,6 +392,8 @@ function renderResults() {
     h += `<div class="note" data-pop="alerts" role="button" tabindex="0" aria-haspopup="dialog">${esc(short)}${floorBtn}</div>`;
   }
 
+  const ccAll = r.climate_check;
+  if (ccAll?.applies) h += `<p class="hint cc-line">${esc(t("cc.line", { name: ccAll.area.name, days: ccAll.moist_season.days }))}</p>`;
   h += r.options.map((o) => {
     const cmp = o.components, tr = o.id === "keep" ? null : tradeoff(cmp.gaez_mean - keep.components.gaez_mean);
     const arrow = { up: "▲", down: "▼", same: "＝" };
@@ -374,6 +405,7 @@ function renderResults() {
       o.benefits.length ? `<button type="button" class="bd ok" data-pop="${key}">${esc(t("badge.benefits", { n: o.benefits.length }))}</button>` : "",
       bad ? `<button type="button" class="bd bad" data-pop="${key}">${esc(t("badge.bad"))}</button>`
         : (o.risks.length ? `<button type="button" class="bd warn" data-pop="${key}">${esc(t("badge.risks", { n: o.risks.length }))}</button>` : ""),
+      climateBadge(o, key),
     ].join("");
     return `<div class="opt ${o.id === "keep" ? "keep" : ""} t-${tone || "none"}" data-pop="${key}" role="button" tabindex="0" aria-haspopup="dialog" aria-label="${esc(t("opt.aria", { label: o.label }))}">
       <h3>${esc(o.label)}${o.id === "keep" ? `<span class="tag">${t("opt.current")}</span>` : ""}</h3>

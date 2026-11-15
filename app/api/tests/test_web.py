@@ -59,3 +59,11 @@ def test_static_files_are_get_only(client):
 def test_favicon_is_an_svg(client):
     r = client.get("/favicon.svg")
     assert r.status_code == 200 and "svg" in r.headers["content-type"] and "<svg" in r.text
+
+
+def test_static_files_must_be_revalidated_so_a_deploy_never_mixes_old_and_new_scripts(client):
+    for path in ("/", "/js/app.js", "/js/i18n.js", "/style.css"):
+        r = client.get(path)
+        assert r.status_code == 200 and r.headers["cache-control"] == "no-cache", path
+    assert client.get("/js/i18n.js").headers.get("etag")
+    assert "no-cache" not in client.get("/api/health").headers.get("cache-control", "")
