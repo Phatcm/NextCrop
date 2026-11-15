@@ -1,15 +1,18 @@
 """Use cases of the API: crops, rotation options for a point, grid cells for the map."""
 from __future__ import annotations
 
+import logging
 import time
 
 from . import config  # noqa: F401  (puts pipeline/ on sys.path)
+from src.rotation import climate_check as cc
 from src.rotation import options as ro
 from src.rotation.crop_names import NAMES_EN
 
 from .grid import OutsideGrid, cell_for, distance_km
 from .repo import MODES, Repo
 
+log = logging.getLogger(__name__)
 CROPS_TTL_SECONDS = 300
 CELL_TTL_SECONDS = 300
 CELL_CACHE_MAX = 512
@@ -149,7 +152,37 @@ class Service:
         res["location"] = {"lat": lat, "lon": lon, "cell_lat": cell.lat, "cell_lon": cell.lon,
                            "cell_bounds": cell.bounds(), "cell_area_km2": cell.area_km2}
         res["cell_indices"] = suit
+        if res.get("options"):
+            # added AFTER the generator ran, as a separate key: it cannot change an option or the order of the options
+            res["climate_check"] = self.climate_check(cell, res, mode, lang)
         return res
+
+    def climate_check(self, cell, res: dict, mode: str, lang: str) -> dict:
+        """Moisture check of the options (climate_check.py). Only for rain-fed modes and only within DEMO_AREA_KM of a
+        demo area, because water_balance_monthly exists only there. It must never break the options: any failure to
+        read the water balance becomes "no data" and the options are returned as usual."""
+        if mode not in cc.RAINFED_MODES:
+            return cc.not_applicable("irrigated_mode", lang)
+        try:
+            regions = [(distance_km(cell.lat, cell.lon, r["center_lat"], r["center_lon"]), r) for r in self.repo.regions()]
+            near = [x for x in regions if x[0] <= DEMO_AREA_KM]
+            if not near:
+                return cc.not_applicable("no_demo_area", lang, km=DEMO_AREA_KM)
+            d, r = min(near, key=lambda x: x[0])
+            key, now = ("wb", r["region_id"]), self._clock()
+            hit = self._cells.get(key)
+            if hit and now - hit[0] <= CELL_TTL_SECONDS:
+                clim = hit[1]
+            else:
+                clim = self.repo.water_balance_climatology(r["region_id"])
+                if len(self._cells) >= CELL_CACHE_MAX:
+                    self._cells.pop(next(iter(self._cells)))
+                self._cells[key] = (now, clim)
+            area = {"region_id": r["region_id"], "name": r["name"], "distance_km": round(d)}
+            return cc.check_options(res, clim, area, mode, lang, max_km=DEMO_AREA_KM)
+        except Exception:                                            # noqa: BLE001  (an annotation must not break options)
+            log.warning("climate_check failed; options are returned without it", exc_info=True)
+            return cc.not_applicable("no_data", lang)
 
     def cells(self, west: float, south: float, east: float, north: float, crop: str, mode: str = "hrlm",
               limit: int = 6000) -> dict:

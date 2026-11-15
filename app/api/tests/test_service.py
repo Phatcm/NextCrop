@@ -173,3 +173,74 @@ def test_distance_km():
     assert distance_km(10, 105, 10, 105) == 0
     assert abs(distance_km(10, 105, 11, 105) - 111.2) < 0.5
     assert abs(distance_km(0, 105, 0, 106) - 111.2) < 0.5 and distance_km(60, 0, 60, 1) < 56
+
+
+# ---------------------------------------------------------------- moisture check (annotation only)
+
+from fakes import AN_GIANG_WB, CROPS, FAR_CELL  # noqa: E402
+from fieldshift_api.service import _for_generator  # noqa: E402
+from src.rotation import options as ro  # noqa: E402
+
+
+def direct_generate(crop="RCW", mode="hrlm", **kw):
+    """What the generator returns on its own for the fake cell: the reference the API must not deviate from."""
+    crops = {k: _for_generator(v) for k, v in CROPS.items()}
+    return ro.generate(crop, crops, {c: VALUES[c][mode] for c in CROPS}, mode=mode, **kw)
+
+
+def test_a_demo_area_in_rain_fed_mode_gets_the_moisture_check():
+    cc = svc().options(10.45, 105.35, "RCW")["climate_check"]
+    assert cc["applies"] is True and cc["area"]["region_id"] == "an_giang_rice" and cc["area"]["distance_km"] <= 60
+    assert cc["moist_season"]["months"] == [5, 6, 7, 8, 9, 10, 11, 12] and cc["moist_season"]["days"] == 245
+    keep = cc["options"]["keep"]                                   # 3 x 105 days + 2 rests of 7 days, in a 245-day moist season
+    assert keep["status"] == "short" and keep["days_needed"] == 329 and keep["shortfall_days"] == 84
+    assert len(cc["monthly"]) == 12 and "CHIRPS" in cc["sources"] and cc["not_checked"] and cc["caveats"]
+
+
+def test_the_options_are_identical_with_or_without_the_check():
+    """The ranking guarantee: the check is a separate key, so options and their order are what the generator returns."""
+    for kw in ({}, {"priorities": ["nitrogen", "yield"]}, {"seasons": 2}, {"min_index": 3000}, {"lang": "en"}):
+        got = svc().options(10.45, 105.35, "RCW", **kw)
+        want = direct_generate(**kw)
+        assert got["options"] == want["options"], kw
+        assert [o["id"] for o in got["options"]] == [o["id"] for o in want["options"]]
+        assert got["skipped"] == want["skipped"] and got["assumptions"] == want["assumptions"]
+
+
+def test_an_irrigated_mode_is_not_limited_by_rain():
+    r = svc().options(10.45, 105.35, "RCW", mode="hilm")
+    assert r["climate_check"]["applies"] is False and r["climate_check"]["reason"] == "irrigated_mode"
+    assert r["options"] == direct_generate(mode="hilm")["options"]
+
+
+def test_a_point_far_from_every_demo_area_says_so_and_does_not_guess():
+    r = svc(cells={FAR_CELL: VALUES}).options(21.04, 105.85, "RCW")
+    assert r["climate_check"]["applies"] is False and r["climate_check"]["reason"] == "no_demo_area"
+    assert "60 km" in r["climate_check"]["message"]
+    assert r["options"] == direct_generate()["options"]
+
+
+def test_the_check_never_breaks_the_options_when_the_water_balance_cannot_be_read():
+    class Broken(FakeRepo):
+        def water_balance_climatology(self, region_id):
+            raise RuntimeError("table not loaded yet")
+
+    r = Service(Broken()).options(10.45, 105.35, "RCW")
+    assert r["climate_check"] == {"applies": False, "reason": "no_data", "message": r["climate_check"]["message"]}
+    assert r["options"] == direct_generate()["options"]
+    nodata = Service(FakeRepo(cells={FAR_CELL: VALUES, CELL: VALUES}))        # a demo area without data (Son La in the fake)
+    assert nodata.options(10.45, 105.35, "RCW")["climate_check"]["applies"] is True
+
+
+def test_the_water_balance_is_read_once_per_area_not_on_every_slider_move():
+    repo = FakeRepo()
+    s = Service(repo)
+    for seasons in (1, 2, 3, 2, 1):
+        s.options(10.45, 105.35, "RCW", seasons=seasons)
+    assert [c for c in repo.calls if c[0] == "water_balance"] == [("water_balance", "an_giang_rice")]
+
+
+def test_english_check_text_and_no_check_for_a_perennial_crop():
+    cc = svc().options(10.45, 105.35, "RCW", lang="en")["climate_check"]
+    assert "not enough moisture" in cc["options"]["keep"]["message"].lower() and cc["lang"] == "en"
+    assert "climate_check" not in svc().options(10.45, 105.35, "COF")        # no options, so nothing to check

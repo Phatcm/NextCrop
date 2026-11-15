@@ -29,6 +29,7 @@ class Repo(Protocol):
     def regions(self) -> list[dict]: ...
     def rain_climatology(self, region_id: str) -> list[tuple[int, float, int]]: ...
     def ndvi_climatology(self, region_id: str, source_key: str) -> list[tuple[int, float, float, float, int]]: ...
+    def water_balance_climatology(self, region_id: str) -> list[tuple[int, float, float, int]]: ...
 
 
 class PgRepo:
@@ -129,6 +130,15 @@ class PgRepo:
             rows = c.run(f"SELECT substring(month, 6, 2)::int, avg(best_mm), count(*) FROM {SCHEMA}.rain_monthly_best "
                          "WHERE region_id = :r GROUP BY 1 ORDER BY 1", r=region_id)
         return [(int(m), float(v), int(n)) for m, v, n in rows]
+
+    def water_balance_climatology(self, region_id: str) -> list[tuple[int, float, float, int]]:
+        """(month, mean rain mm, mean ET0 mm, years) from water_balance_monthly: rain is CHIRPS, ET0 is computed from
+        NASA POWER (FAO-56) and calibrated to the GAEZ ET0 layer. Months with a NULL value are left out of the mean."""
+        with self._tx() as c:
+            rows = c.run(f"SELECT substring(month, 6, 2)::int, avg(rain_mm), avg(et0_mm), count(*) "
+                         f"FROM {SCHEMA}.water_balance_monthly WHERE region_id = :r AND rain_mm IS NOT NULL "
+                         "AND et0_mm IS NOT NULL GROUP BY 1 ORDER BY 1", r=region_id)
+        return [(int(m), float(rain), float(et0), int(n)) for m, rain, et0, n in rows]
 
     def ndvi_climatology(self, region_id: str, source_key: str) -> list[tuple[int, float, float, float, int]]:
         """(month, mean, min, max, n) over MEASURED composites that passed QA. Interpolated rows are not

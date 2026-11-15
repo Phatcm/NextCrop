@@ -112,3 +112,11 @@ def test_nasa_endpoint(client):
     assert client.get("/api/nasa?lat=30&lon=105").status_code == 422
     assert client.get("/api/nasa?lat=10.45").status_code == 422
     assert client.post("/api/nasa?lat=10&lon=105").status_code == 405
+
+
+def test_options_over_http_carry_the_moisture_check_and_leave_the_options_alone(client):
+    body = client.get(BASE).json()
+    assert body["climate_check"]["applies"] is True and body["climate_check"]["options"]["keep"]["status"] == "short"
+    assert [o["id"] for o in body["options"]][0] == "keep"
+    irrigated = client.get(BASE + "&mode=hilm").json()["climate_check"]
+    assert irrigated["applies"] is False and irrigated["reason"] == "irrigated_mode"
