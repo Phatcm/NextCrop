@@ -34,6 +34,8 @@ Bí mật chỉ nằm trong biến môi trường, không có trong repo.
 - `location`: `lat`, `lon` người dùng chọn, `cell_lat`, `cell_lon` (tâm ô), `cell_bounds` `[tây, nam, đông, bắc]`, `cell_area_km2` (khoảng 80–85 km²);
 - `cell_indices`: chỉ số của mọi cây trong ô đó (để giao diện hiện danh sách cây kèm mức phù hợp).
 
+- `climate_check` (chỉ khi có phương án): kiểm tra độ ẩm của từng phương án cho 6 vùng demo, xem `docs/rotation-rules.md`. Là khóa riêng, **không ảnh hưởng `options`**. `applies: true` kèm `area`, `moist_season` (`months`, `days`), `monthly` (12 tháng: `rain_mm`, `et0_mm`, `ratio`, `moist`), `options` (theo `id` phương án: `status` = `enough`/`short`/`unknown`, `days_needed`, `days_available`, `shortfall_days`, `margin_days`, `near_limit`, `single_season_fits`, `message`), `not_checked`, `caveats`, `sources`. `applies: false` kèm `reason` (`irrigated_mode`, `no_demo_area`, `no_data`) và `message`.
+
 Với cây lâu năm, kết quả có `message` và `options` rỗng (HTTP 200).
 
 ## Lỗi

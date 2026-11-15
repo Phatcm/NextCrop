@@ -32,6 +32,12 @@ REGIONS = [{"region_id": "an_giang_rice", "name": "An Giang - lúa 3 vụ", "cen
            {"region_id": "son_la_maize", "name": "Sơn La (Mai Sơn) - ngô", "center_lat": 21.15, "center_lon": 104.1, "ndvi_primary": "modis_qa"}]
 
 
+# (month, mean rain mm CHIRPS, mean ET0 mm, years) of An Giang, 2015-2025: moist months (rain >= 0.5 ET0) are May to Dec
+AN_GIANG_WB = list(zip(range(1, 13), [19.0, 12, 20, 64, 185, 150, 200, 185, 244, 300, 180, 64],
+                       [120.0, 143, 188, 176, 144, 116, 111, 114, 104, 103, 99, 105], [11] * 12))
+FAR_CELL = (21.0417, 105.875)          # Ha Noi: about 185 km from the Son La demo area, 300+ km from An Giang
+
+
 class FakeRepo:
     def __init__(self, ok=True, cells=None):
         self.ok, self.cells, self.calls = ok, cells if cells is not None else {CELL: VALUES}, []
@@ -64,6 +70,10 @@ class FakeRepo:
     def ndvi_climatology(self, region_id, source_key):
         self.calls.append(("ndvi", region_id, source_key))
         return [(m, 0.5 + m / 100, 0.3, 0.8, 22) for m in range(1, 13)] if region_id == "an_giang_rice" else []
+
+    def water_balance_climatology(self, region_id):
+        self.calls.append(("water_balance", region_id))
+        return list(AN_GIANG_WB) if region_id == "an_giang_rice" else []
 
     def cells_in_bbox(self, west, south, east, north, crop, mode, limit):
         rows = [(la, lo, v[crop][mode]) for (la, lo), v in self.cells.items()

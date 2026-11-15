@@ -56,6 +56,21 @@ Người dùng được phép hạ `min_index` (quyết định 14/11). Giao di�
 ## Ngôn ngữ
 `generate(..., lang="vi" | "en")` (và `?lang=` của API, `--lang` chưa có ở dòng lệnh) chọn ngôn ngữ của mọi câu chữ trong kết quả: tên phương án, lợi ích, rủi ro, cảnh báo, gợi ý hạ ngưỡng, giả định và nguồn, bảng lớp độ phù hợp, phần "chưa xét". Chữ nằm trong hai bảng `STRINGS["vi"]` và `STRINGS["en"]` (`pipeline/src/rotation/options.py`), cùng khoá và cùng chỗ điền; test `tests/test_rotation_en.py` kiểm tra hai bảng khớp nhau, bản tiếng Anh không lẫn chữ Việt, và **ngôn ngữ chỉ đổi chữ, không đổi phương án** (cùng thứ tự, cùng cây, cùng điểm). Tiếng Việt là mặc định và đầu ra không đổi so với trước khi có tiếng Anh (đã so 41.293 lần chạy trên 347 ô thật). Tên cây: tiếng Việt từ `dim_crop.name_vi`, tiếng Anh từ `crop_names.py`; cây thiếu tên tiếng Anh dùng tên tiếng Việt.
 
+## Kiểm tra độ ẩm cho 6 vùng demo (không đổi thứ hạng)
+Mã: `pipeline/src/rotation/climate_check.py`; API gắn kết quả vào khóa riêng `climate_check` của `/api/options` **sau khi** bộ sinh đã chạy xong. Đây là **chú thích**, không phải điểm: không đổi phương án nào, không đổi thứ tự, không thêm điểm tổng. Test so sánh `options` qua API với `generate()` gọi thẳng (và bản chạy trên dữ liệu thật: 864 lượt, 0 khác biệt).
+
+**Câu hỏi nó trả lời, cho từng phương án:** các cây của phương án này có mọc được lần lượt, chỉ nhờ mưa, ở vùng này không?
+- **Mùa đủ ẩm** (tiêu chí thời kỳ sinh trưởng của FAO AEZ): các tháng có mưa ≥ 0,5 × ET0. Mưa là CHIRPS v3 (không phải NASA); ET0 tính từ NASA POWER theo FAO-56, hiệu chỉnh theo lớp ET0 của GAEZ (bảng `water_balance_monthly`). Trung bình các năm 2015–2025.
+- **Số ngày sẵn có** = chuỗi tháng đủ ẩm liên tục dài nhất (vòng theo năm), tính bằng ngày.
+- **Số ngày cần** = độ dài vụ ngắn nhất của từng vụ (cùng `cycle_days_min` với bộ sinh) cộng khoảng nghỉ **giữa** hai vụ liền nhau (`gap_rice`, `gap_other`; khoảng nghỉ sau vụ cuối rơi ngoài mùa đủ ẩm nên không tính).
+- `enough` nếu cần ≤ sẵn có; `short` nếu cần > sẵn có, kèm số ngày thiếu (cần tưới bổ sung hoặc bớt vụ). `near_limit` bật khi chênh lệch dưới 31 ngày: dữ liệu theo tháng nên chưa kết luận chắc.
+
+**Chỉ áp dụng** ở chế độ nhờ mưa (`hrlm`, `lrlm`) và khi điểm nằm trong 60 km quanh một vùng demo. Ngoài ra trả `applies: false` kèm lý do (`irrigated_mode`, `no_demo_area`, `no_data`), không đoán. Lỗi khi đọc cân bằng nước không bao giờ làm hỏng phương án.
+
+**Không kiểm tra (ghi trong `not_checked`):** nhiệt độ, vì cột `min_temp_c` của GAEZ chưa rõ nghĩa nên chưa có ngưỡng lạnh hoặc nóng có nguồn xác minh cho từng cây; và tháng bắt đầu của từng vụ, vì bộ sinh không xếp lịch. Tiêu chí của FAO không phụ thuộc loại cây; lúa nước cần nhiều nước hơn nên giới hạn thực tế chặt hơn.
+
+**Kết quả đọc được từ dữ liệu thật (mặc định, nhờ mưa, đầu vào cao):** mùa đủ ẩm là 334 ngày ở Thái Bình, 245 ngày ở An Giang, Sóc Trăng và Đắk Lắk, 214 ngày ở Sơn La, 122 ngày ở Ninh Thuận. Số vụ mặc định của bộ sinh chỉ dựa trên việc vừa 365 ngày, nên ở 5/6 vùng các phương án 3 vụ đều thiếu ẩm nếu chỉ nhờ mưa (ví dụ lúa 3 vụ ở An Giang cần 329 ngày, mùa đủ ẩm có 245); điều này khớp thực tế là 3 vụ cần tưới và đê bao.
+
 ## Giới hạn phải nói rõ với người dùng
 - **Thứ tự các vụ không được xếp lịch.** GAEZ chỉ cho ngày gieo tối ưu của từng cây đứng riêng, không cho cây đứng sau cây khác, và giá trị nhiễu giữa các ô kề nhau. `sequence` chỉ là liệt kê chuẩn (cây giữ lại trước, rồi cây thay thế theo điểm GAEZ).
 - **Độ dài vụ lấy giống ngắn nhất** mà GAEZ thử (lúa 105 ngày). Vụ thực tế có thể dài hơn.
