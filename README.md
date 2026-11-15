@@ -5,7 +5,7 @@ Team entry **NextCrop** · Ho Chi Minh City local event, 14–15 Nov 2026 · [De
 
 Pick a place in Vietnam and the crop that is grown there now. NextCrop compares **at least three crop-rotation options, always including "keep the current crop"**, and says in plain words why, what the benefits and risks are, what is still unknown, and how each option trades off against what the farm does today. It is an **advisory tool**: it supports, and never replaces, the judgement of farmers and local agronomists.
 
-> The interface is in **Vietnamese and English** (VI | EN switch in the header). Vietnamese was the working language of the team, so most of the engineering notes in `docs/` are in Vietnamese; the sections below are in English.
+> **Đọc bằng tiếng Việt: [README.vi.md](README.vi.md).** The interface is in **Vietnamese and English** (VI | EN switch in the header). Vietnamese was the working language of the team, so most of the engineering notes in `docs/` are in Vietnamese.
 
 ## What you can do
 - Click anywhere on the map (or choose a province) and a crop. The map colours every ~9 km cell by how suitable it is for that crop.
@@ -71,14 +71,5 @@ One cell (~80–85 km²) gets one answer, so results are **not** for a single fi
 ## Team and AI tools
 Built by the two members of team NextCrop (GitHub: `Phatcm`, `hnguyen021`). AI tools were used and are declared in [docs/AI_USAGE.md](docs/AI_USAGE.md). Recommendations are advisory only.
 
----
-
-# Tiếng Việt (tóm tắt)
-
-**NextCrop** là sản phẩm dự thi NASA Space Apps Challenge 2026, đề *Field Shift: Adapting Farms with NASA Data*. Người dùng chọn vị trí và cây đang trồng; công cụ so sánh **ít nhất ba phương án luân canh (gồm "giữ nguyên")**, nêu lợi ích, rủi ro, thông tin còn thiếu và mức đánh đổi, bằng lời dễ hiểu, tiếng Việt và tiếng Anh. Đây là công cụ **hỗ trợ**, không thay thế phán đoán của nông dân hay cán bộ khuyến nông.
-
-- **Dữ liệu NASA** (POWER, MODIS NDVI, SMAP, MCD12Q1, NASADEM, GFSAD30) nuôi pipeline, tab "NASA" (nhiệt độ, mưa, độ xanh theo tháng) và nhãn *kiểm tra độ ẩm* của từng phương án ở 6 vùng demo. **Xếp hạng phương án dựa trên chỉ số độ phù hợp FAO GAEZ v5** cùng các luật về họ cây, họ đậu, độ dài vụ; dữ liệu NASA không đổi thứ tự các phương án.
-- Chỉ số GAEZ (0–10000) là **tiềm năng** của đất, không phải năng suất hay lợi nhuận; một ô ~80 km² chỉ cho một đáp án, không dùng cho từng thửa.
-- Mưa (CHIRPS) không phải dữ liệu NASA; mưa và NDVI chỉ có ở 6 vùng demo; ranh giới tỉnh trong bản đồ là năm 2008.
-- Cách chạy, cấu trúc, tài liệu kỹ thuật: xem các phần tiếng Anh ở trên và `docs/`, `app/README.md`, `app/api/README.md`.
-- Công cụ AI đã dùng được khai báo tại [docs/AI_USAGE.md](docs/AI_USAGE.md).
+## License
+The code and documentation in this repository are released under the [MIT License](LICENSE). Data and third-party material keep their own terms: FAO GAEZ v5 (CC BY 4.0), NASA open data, CHIRPS, geoBoundaries, Esri imagery and MapLibre, see "Data credits" above.
