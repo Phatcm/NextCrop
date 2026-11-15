@@ -49,6 +49,8 @@ View cho app: `v_region_overview` (một dòng mỗi vùng kèm số liệu đ�
 ## API cho app (`app/api`)
 App không nối thẳng Postgres: nó gọi API chỉ đọc (FastAPI), API chạy mọi truy vấn trong `BEGIN READ ONLY` và gọi bộ sinh phương án `pipeline/src/rotation`. Điểm người dùng chọn được đổi thành **ô lưới chứa điểm** (cùng quy ước tâm ô ở trên), không phải ô gần nhất; điểm ngoài khung 102–110°E, 8–24°N bị từ chối (422), ô không có dữ liệu (biển) trả 404. DATA-14 vẫn mở: điểm ở Lào hoặc Campuchia trong khung vẫn nhận kết quả. Endpoint và mã lỗi: [../app/api/README.md](../app/api/README.md).
 
+`/api/options` còn trả khóa `climate_check` (kiểm tra độ ẩm cho 6 vùng demo, đọc `water_balance_monthly`); nó chỉ chú thích, không đổi `options`. Chi tiết: [rotation-rules.md](rotation-rules.md).
+
 ## R2
 Cấu trúc bucket, manifest và catalog: xem `pipeline/README.md` (mục Cloudflare R2). Bản JSON "gold" (`gold/v<schema>/<vùng>.json`) vẫn được tạo, dùng khi cần xuất file tĩnh hoặc kiểm tra nhanh; không phải đường đọc chính của app.
 
