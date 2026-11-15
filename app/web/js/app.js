@@ -434,7 +434,7 @@ const byMonth = (rows, field) => Object.fromEntries(rows.map((r) => [r.m, r[fiel
 
 function nasaHtml() {
   if (st.outside) return `<div class="hint">${t("card.outside")}</div>`;
-  if (st.nasaState === "idle" || st.nasaState === "loading") return `<div class="hint">${t("nasa.loading")}</div>`;
+  if (st.nasaState === "idle" || st.nasaState === "loading") return `<div class="hint loading">${t("nasa.loading")}</div>`;
   if (st.nasaState === "error") {
     return st.nasaErr?.code === "no_data" ? `<div class="hint">${t("nasa.noData")}</div>`
       : `<div class="hint">${t("nasa.error")} <button type="button" class="small" data-retry-nasa>${t("retry")}</button></div>`;
@@ -469,7 +469,7 @@ function renderCard() {
   const head = cardTabs();
   if (st.cardTab === "nasa") { $("card").innerHTML = head + nasaHtml(); return; }
   if (st.outside) { $("card").innerHTML = `${head}<div class="hint">${t("card.outside")}</div>`; return; }
-  if (st.layerState === "loading") { $("card").innerHTML = `${head}<div class="hint">${t("card.loading")}</div>`; return; }
+  if (st.layerState === "loading") { $("card").innerHTML = `${head}<div class="hint loading">${t("card.loading")}</div>`; return; }
   if (st.layerState === "error") { $("card").innerHTML = `${head}<div class="hint">${t("card.error")} <button type="button" class="small" data-retry-layer>${t("retry")}</button></div>`; return; }
   if (!st.cells.length) { $("card").innerHTML = `${head}<div class="hint">${t("card.empty")}</div>`; return; }
   const counts = countByClass(st.cells);
