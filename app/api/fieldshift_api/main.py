@@ -105,5 +105,17 @@ def cells(svc: Annotated[Service, Depends(get_service)], west: float, south: flo
 mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("application/geo+json", ".geojson")
 _web = config.web_dir()
+
+
+class RevalidatingStaticFiles(StaticFiles):
+    """Static files that the browser must revalidate (ETag) before reuse. Without a Cache-Control header a browser
+    guesses a lifetime from Last-Modified and can mix a new app.js with an old i18n.js after a deploy."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 if _web is not None:
-    app.mount("/", StaticFiles(directory=_web, html=True), name="web")
+    app.mount("/", RevalidatingStaticFiles(directory=_web, html=True), name="web")

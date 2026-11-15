@@ -22,6 +22,8 @@ Giao diện có **hai ngôn ngữ, Việt và Anh**, nút VI/EN ở đầu trang
 
 Thẻ bên phải có **hai tab**: "Tóm tắt" (các ô theo mức phù hợp) và "NASA" (nhiệt độ, mưa và độ xanh NDVI theo tháng của nơi đang chọn, vẽ bằng SVG tự viết, thẻ rộng ra khi mở tab này). Dữ liệu từ `/api/nasa`; mưa và NDVI chỉ có ở sáu vùng demo, ngoài đó chỉ có nhiệt độ. Chỉ để tham khảo: khuyến nghị luân canh vẫn dựa vào FAO GAEZ, không dựa vào các số này.
 
+Ở 6 vùng demo, mỗi thẻ phương án có thêm nhãn **kiểm tra độ ẩm** ("Đủ ẩm nhờ mưa" hoặc "Thiếu ẩm N ngày", kèm "sát ngưỡng" khi chênh dưới một tháng). Dữ liệu từ khóa `climate_check` của `/api/options` (PR #25): so số ngày phương án cần với mùa đủ ẩm của vùng (mưa CHIRPS ≥ 0,5 × ET0 tính từ NASA POWER). Chỉ là chú thích, **không đổi xếp hạng**; bấm vào nhãn để xem lập luận, mười hai tháng đủ ẩm hay khô, nguồn và những gì chưa kiểm tra. Ngoài 6 vùng, hoặc ở chế độ có tưới, không hiện nhãn.
+
 Quyết định (14/11, Hùng chốt): giao diện là file tĩnh do chính API phục vụ, nên một container Python là đủ và không cần CORS. Chuyển sang framework (React...) để sau cuộc thi nếu cần.
 
 ## Chạy
